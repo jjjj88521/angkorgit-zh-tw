@@ -6,7 +6,11 @@ const rules = {
   attributes: ['title', 'placeholder'],
   objectKeys: ['label'],
   callSinks: ['toast.error'],
-  keep: { exact: ['AngKorGit'], patterns: [] },
+  labelSinks: { act: '*', AiError: [0] },
+  proseExclude: ['ipc\\.ts$'],
+  proseDenyKeys: ['authorization', 'id'],
+  explicit: [{ file: 'utils\\.ts$', texts: ['{{0}}m ago', 'Orange'] }],
+  keep: { exact: ['AngKorGit'], patterns: ['\\d+px\\b'] },
 };
 const run = (code, file = 'a.tsx') => transform(code, file, rules, './i18n');
 const body = (code, file) => run(code, file).code.replace("import { __t } from './i18n';\n", '');
@@ -64,9 +68,37 @@ test('skips kept strings and const assertions', () => {
 });
 
 test('reports natural-looking strings it did not wrap', () => {
-  const out = run("const names = ['Recent repositories'];", 'a.ts');
+  const out = run("const names = ['Dockerfile'];", 'a.ts');
   assert.equal(out.entries.length, 0);
-  assert.deepEqual(out.candidates.map((c) => c.text), ['Recent repositories']);
+  assert.deepEqual(out.candidates.map((c) => c.text), ['Dockerfile']);
+});
+
+test('label sinks wrap only the listed argument positions', () => {
+  assert.equal(
+    body("throw new AiError('Request failed', 'Anthropic'); act(`Push ${b}`, op);", 'a.ts'),
+    'throw new AiError(__t("Request failed"), \'Anthropic\'); act(__t("Push {{0}}", [b]), op);',
+  );
+});
+
+test('wraps multi-word prose in arrays, variables and returns', () => {
+  const out = run("const a = ['Toggle terminal', 'End']; const b = 'Set up AI'; function f() { return `Fetched ${n} remotes.`; }", 'a.ts');
+  assert.deepEqual(out.entries.map((e) => e.key), ['Toggle terminal', 'Set up AI', 'Fetched {{0}} remotes.']);
+});
+
+test('prose under an unknown key is wrapped unless the key is denied', () => {
+  const out = run("const a = { outcome: 'Nothing was pushed.', authorization: 'Bearer token value' };", 'a.ts');
+  assert.deepEqual(out.entries.map((e) => e.key), ['Nothing was pushed.']);
+});
+
+test('prose rules skip excluded files and kept patterns', () => {
+  assert.equal(run("const a = ['Demo output line'];", 'core/ipc.ts').entries.length, 0);
+  assert.equal(run("const a = ['12px Mono Font, monospace'];", 'a.ts').entries.length, 0);
+});
+
+test('explicit texts are wrapped only in their file, const assertions included', () => {
+  const code = "const c = ['Orange'] as const; const t = `${n}m ago`;";
+  assert.deepEqual(run(code, 'shared/utils.ts').entries.map((e) => e.key), ['Orange', '{{0}}m ago']);
+  assert.equal(run(code, 'shared/other.ts').entries.length, 0);
 });
 
 test('adds the import after directives and leading comments', () => {

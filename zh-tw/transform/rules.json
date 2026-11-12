@@ -1,17 +1,61 @@
 {
   "roots": ["apps/desktop/src", "packages/core/src"],
-  "exclude": ["\\.test\\.tsx?$", "\\.spec\\.tsx?$", "\\.d\\.ts$", "/__tests__/", "zhtw-i18n\\.ts$"],
+  "exclude": [
+    "\\.test\\.tsx?$", "\\.spec\\.tsx?$", "\\.d\\.ts$", "/__tests__/", "zhtw-i18n\\.ts$",
+    "apps/desktop/src/core/demo\\.ts$"
+  ],
   "attributes": [
-    "title", "placeholder", "aria-label", "aria-description", "label", "alt", "description", "tooltip", "hint",
-    "subtitle", "heading", "emptyText", "confirmLabel", "cancelLabel", "helperText", "caption", "message"
+    "title", "placeholder", "aria-label", "aria-description", "ariaLabel", "label", "alt", "description", "tooltip",
+    "hint", "subtitle", "heading", "emptyText", "confirmLabel", "cancelLabel", "helperText", "caption", "message", "detail"
   ],
   "objectKeys": [
     "title", "label", "description", "placeholder", "tooltip", "hint", "subtitle", "message", "detail",
     "confirmLabel", "cancelLabel", "shortLabel", "help", "heading", "caption"
   ],
   "callSinks": ["toast", "toast.error", "toast.success", "toast.info", "toast.warning", "toast.loading", "toast.message"],
+  "labelSinks": {
+    "act": "*",
+    "run": "*",
+    "runPush": "*",
+    "runStage": "*",
+    "submit": "*",
+    "pickDirectory": [0],
+    "pickFile": [0],
+    "toastOutcome": [1],
+    "reportOutcome": [1],
+    "folderCheckbox": [1],
+    "setError": [0],
+    "Error": [0],
+    "AiError": [0],
+    "ForgeError": [0],
+    "label.startsWith": [0]
+  },
+  "proseExclude": [
+    "apps/desktop/src/core/ipc\\.ts$",
+    "apps/desktop/src/features/terminal/font\\.ts$",
+    "packages/core/src/ai/capabilities\\.ts$",
+    "packages/core/src/ai/style\\.ts$"
+  ],
+  "proseDenyKeys": [
+    "authorization", "Authorization", "content", "family", "fontFamily", "name", "border", "boxShadow", "outline", "className", "style",
+    "id", "key", "value", "type", "kind", "command", "event"
+  ],
+  "explicit": [
+    { "file": "apps/desktop/src/shared/utils\\.ts$", "texts": ["{{0}}m ago", "{{0}}h ago", "{{0}}d ago", "{{0}}mo ago", "{{0}}y ago"] },
+    { "file": "packages/core/src/git/repoGroups\\.ts$", "texts": ["Orange", "Blue", "Green", "Violet", "Red", "Teal", "Amber", "Pink"] },
+    { "file": "packages/core/src/settings/filter\\.ts$", "texts": ["Appearance", "Authentication", "Shortcuts"] },
+    { "file": "packages/core/src/forge/providers/github\\.ts$", "texts": ["{{0}} — the source branch does not exist on this remote (is it pushed there?)"] },
+    { "file": "features/graph/CommitGraph\\.tsx$", "texts": ["Branches and tags", "Commit message", "Author", "Hash", "Date"] },
+    { "file": "features/settings/SettingsDialog\\.tsx$", "texts": ["Settings"] },
+    { "file": "features/repository/GroupUpdateDialog\\.tsx$", "texts": ["Updated", "Skipped", "Failed", "Partial", "Cancelled", "Unchanged"] },
+    { "file": "features/repository/WelcomePage\\.tsx$", "texts": ["Other", "Pulling group…", "Fetching group…"] },
+    { "file": "features/settings/FontsCard\\.tsx$", "texts": ["Monospace", "Fonts"] },
+    { "file": "features/settings/AccountsTab\\.tsx$", "texts": ["Reconnected", "Connected"] },
+    { "file": "components/FileTree\\.tsx$", "texts": ["Collapse", "Expand"] },
+    { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] }
+  ],
   "keep": {
     "exact": ["AngKorGit", "AngKor", "Git", "GitHub", "GitLab", "Bitbucket"],
-    "patterns": []
+    "patterns": ["(^|[\\s\"'(])\\d+(\\.\\d+)?px\\b", "<[a-z]+[\\s>]"]
   }
 }

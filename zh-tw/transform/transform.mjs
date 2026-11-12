@@ -15,6 +15,15 @@ export function looksNatural(s) {
   return /[.!?…]$/.test(t) && !/[:[\]]/.test(t);
 }
 
+export function looksProse(s) {
+  const t = s.trim();
+  if (/^(https?:|\/|\.\/|\.\.\/)/.test(t)) return false;
+  if (t.split(/\s+/).filter((word) => /[A-Za-z]{2,}/.test(word)).length < 2) return false;
+  return /^[A-Z]/.test(t) || /[.!?…]$/.test(t);
+}
+
+const PROSE_CONTEXTS = new Set(['ArrayLiteralExpression', 'VariableDeclaration', 'ReturnStatement', 'ArrowFunction', 'TemplateSpan', 'BindingElement', 'Parameter']);
+
 const ENTITIES = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…', mdash: '—', ndash: '–',
   rarr: '→', larr: '←', middot: '·', times: '×', copy: '©', bull: '•',
@@ -71,6 +80,11 @@ export function transform(source, fileName, rules, importPath) {
   const keepExact = new Set(rules.keep?.exact ?? []);
   const keepPatterns = (rules.keep?.patterns ?? []).map((p) => new RegExp(p));
   const isKept = (text) => keepExact.has(text.trim()) || keepPatterns.some((p) => p.test(text));
+  const relPath = fileName.replace(/\\/g, '/');
+  const labelSinks = rules.labelSinks ?? {};
+  const denyKeys = new Set(rules.proseDenyKeys ?? []);
+  const proseAllowed = !(rules.proseExclude ?? []).some((p) => new RegExp(p).test(relPath));
+  const explicit = new Set((rules.explicit ?? []).filter((e) => new RegExp(e.file).test(relPath)).flatMap((e) => e.texts));
 
   const edits = [];
   const entries = [];
@@ -98,7 +112,7 @@ export function transform(source, fileName, rules, importPath) {
     }
     if (ts.isJsxAttribute(p)) {
       const name = p.name.getText(sf);
-      return attributes.has(name) ? { type: 'attr', direct: true } : { type: 'unknownAttr', ctx: name };
+      return attributes.has(name) ? { type: 'attr', direct: true } : { type: 'unknownAttr', ctx: name, direct: true };
     }
     if (ts.isJsxExpression(p)) {
       const gp = p.parent;
@@ -116,7 +130,10 @@ export function transform(source, fileName, rules, importPath) {
     if (ts.isCallExpression(p) || ts.isNewExpression(p)) {
       if (!p.arguments?.includes(cur)) return null;
       const name = calleeName(p);
-      return callSinks.has(name) ? { type: 'sink' } : { type: 'other', ctx: `call:${name}` };
+      if (callSinks.has(name)) return { type: 'sink' };
+      const indexes = labelSinks[name];
+      if (indexes && (indexes === '*' || indexes.includes(p.arguments.indexOf(cur)))) return { type: 'labelSink' };
+      return { type: 'other', ctx: `call:${name}` };
     }
     if (
       ts.isLiteralTypeNode(p) || ts.isImportDeclaration(p) || ts.isExportDeclaration(p) || ts.isExternalModuleReference(p) ||
@@ -132,15 +149,18 @@ export function transform(source, fileName, rules, importPath) {
       case 'jsxChild': return hasWords(text) && !isAllCaps(text);
       case 'attr':
       case 'sink': return hasWords(text);
-      case 'objKey': return looksNatural(text);
+      case 'objKey':
+      case 'labelSink': return looksNatural(text);
+      case 'other': return proseAllowed && PROSE_CONTEXTS.has(pos.ctx) && looksProse(text);
+      case 'unknownKey': return proseAllowed && !denyKeys.has(pos.ctx) && looksProse(text);
       default: return false;
     }
   }
 
-  function handleLiteral(node, text, wrap) {
+  function handleLiteral(node, text, key, wrap) {
     const pos = position(node);
     if (!pos || isKept(text)) return;
-    if (accepts(pos, text) && !isUnderConstAssertion(node)) return wrap(pos);
+    if (explicit.has(key) || (accepts(pos, text) && !isUnderConstAssertion(node))) return wrap(pos);
     if (looksNatural(text)) candidates.push({ text, ctx: pos.ctx ?? pos.type, line: lineOf(node.getStart(sf)) });
   }
 
@@ -159,7 +179,7 @@ export function transform(source, fileName, rules, importPath) {
       const inJsxAttr = ts.isJsxAttribute(node.parent);
       const text = inJsxAttr ? decodeEntities(node.text) : node.text;
       if (text === null) return;
-      handleLiteral(node, text, (pos) => {
+      handleLiteral(node, text, text, (pos) => {
         const replacement = pos.direct ? `{${call(text)}}` : call(text);
         edits.push({ start: node.getStart(sf), end: node.getEnd(), text: replacement });
         record(text, pos.type, node);
@@ -172,7 +192,7 @@ export function transform(source, fileName, rules, importPath) {
       const pattern = node.head.text + spans.map((s, i) => `{{${i}}}${s.literal.text}`).join('');
       const simple = !literalText.includes('{{') && spans.every((s) => !(ts.isBinaryExpression(s.expression) && s.expression.operatorToken.kind === K.CommaToken));
       if (simple) {
-        handleLiteral(node, pattern.replace(/\{\{\d+\}\}/g, '1'), (pos) => {
+        handleLiteral(node, pattern.replace(/\{\{\d+\}\}/g, '1'), pattern, (pos) => {
           if (!hasWords(literalText)) return;
           edits.push({ start: node.getStart(sf), end: spans[0].expression.getFullStart(), text: `__t(${JSON.stringify(pattern)}, [` });
           for (let i = 0; i < spans.length - 1; i++) {
