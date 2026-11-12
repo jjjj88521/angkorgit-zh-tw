@@ -1,0 +1,17 @@
+{
+  "roots": ["apps/desktop/src", "packages/core/src"],
+  "exclude": ["\\.test\\.tsx?$", "\\.spec\\.tsx?$", "\\.d\\.ts$", "/__tests__/", "zhtw-i18n\\.ts$"],
+  "attributes": [
+    "title", "placeholder", "aria-label", "aria-description", "label", "alt", "description", "tooltip", "hint",
+    "subtitle", "heading", "emptyText", "confirmLabel", "cancelLabel", "helperText", "caption", "message"
+  ],
+  "objectKeys": [
+    "title", "label", "description", "placeholder", "tooltip", "hint", "subtitle", "message", "detail",
+    "confirmLabel", "cancelLabel", "shortLabel", "help", "heading", "caption"
+  ],
+  "callSinks": ["toast", "toast.error", "toast.success", "toast.info", "toast.warning", "toast.loading", "toast.message"],
+  "keep": {
+    "exact": ["AngKorGit", "AngKor", "Git", "GitHub", "GitLab", "Bitbucket"],
+    "patterns": []
+  }
+}
