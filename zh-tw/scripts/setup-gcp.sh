@@ -202,7 +202,7 @@ run_wizard() {
 
 TOTAL_STAGES=9
 
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 # Remembered answers live inside .git so they can never be committed.
 ENV_FILE="$(git rev-parse --git-dir)/zh-tw-wizard.env"
 # gh would otherwise pick the `upstream` remote; secrets belong on the fork.
