@@ -1,0 +1,54 @@
+repository,版本庫
+repositories,版本庫
+commit,提交
+commits,提交
+committer,提交者
+author,作者
+branch,分支
+branches,分支
+stash,貯存
+stashes,貯存
+stage,暫存
+staged,已暫存
+unstage,取消暫存
+index,索引
+rebase,重定基底
+cherry-pick,揀選
+fetch,取得
+pull,拉取
+push,推送
+merge,合併
+checkout,簽出
+tag,標籤
+tags,標籤
+remote,遠端
+remotes,遠端
+upstream,上游
+worktree,工作區
+worktrees,工作區
+working tree,工作區
+submodule,子模組
+submodules,子模組
+revert,還原
+reset,重設
+amend,修補
+conflict,衝突
+conflicts,衝突
+untracked,未追蹤
+hook,掛鉤
+hooks,掛鉤
+fast-forward,快轉
+discard,捨棄
+hunk,區塊
+hunks,區塊
+patch,修補檔
+diff,差異
+reflog,引用日誌
+clone,拓製
+blame,溯源
+bisect,二分搜尋
+detached HEAD,分離開頭指標
+pull request,拉取請求
+pull requests,拉取請求
+merge request,合併請求
+merge requests,合併請求

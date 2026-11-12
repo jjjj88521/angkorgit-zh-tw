@@ -24,8 +24,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Transform unit tests
-        run: node --test zh-tw/tests/transform.test.mjs
+      - name: zh-TW tooling unit tests
+        run: node --test "zh-tw/tests/*.test.mjs"
+      - name: Check the locale file
+        run: node zh-tw/scripts/check-locale.mjs
       # Upstream's unit tests include one that scans source text, so they run before the rewrite.
       - name: Upstream unit tests on untouched sources
         run: pnpm test

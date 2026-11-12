@@ -54,6 +54,7 @@
     { "file": "components/FileTree\\.tsx$", "texts": ["Collapse", "Expand"] },
     { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] }
   ],
+  "prefixConstraints": [{ "prefix": "Pull", "except": "^Pull requests?\\b" }],
   "keep": {
     "exact": ["AngKorGit", "AngKor", "Git", "GitHub", "GitLab", "Bitbucket"],
     "patterns": ["(^|[\\s\"'(])\\d+(\\.\\d+)?px\\b", "<[a-z]+[\\s>]"]
