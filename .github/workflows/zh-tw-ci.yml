@@ -1,0 +1,38 @@
+name: zh-TW CI
+
+on:
+  push:
+    branches: ['feat/zh-tw-**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zh-tw-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transform:
+    name: Rewrite, typecheck, build & e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Transform unit tests
+        run: node --test zh-tw/tests/transform.test.mjs
+      # Upstream's unit tests include one that scans source text, so they run before the rewrite.
+      - name: Upstream unit tests on untouched sources
+        run: pnpm test
+      - name: Rewrite UI strings
+        run: node zh-tw/scripts/apply.mjs --write
+      - run: pnpm typecheck
+      - run: pnpm --filter @angkorgit/desktop build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Upstream e2e on rewritten sources (English locale)
+        run: pnpm test:e2e
