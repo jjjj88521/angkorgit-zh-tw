@@ -241,11 +241,11 @@ banner "AngKorGit zh-TW：Google 翻譯設定"
 
 stage "前置檢查"
 for tool in gcloud gh jq curl; do
-  command -v "$tool" >/dev/null 2>&1 || stop "找不到 $tool，請先安裝後再重跑。"
+  command -v "$tool" >/dev/null 2>&1 || stop "找不到 ${tool}，請先安裝後再重跑。"
 done
 gh auth status >/dev/null 2>&1 || stop "gh 尚未登入，請先執行 gh auth login。"
-[[ -f "$TERMBASE" ]] || stop "找不到 $TERMBASE。"
-say "工具都已就緒。術語表來源：$TERMBASE（$(wc -l < "$TERMBASE" | tr -d ' ') 條）"
+[[ -f "$TERMBASE" ]] || stop "找不到 ${TERMBASE}。"
+say "工具都已就緒。術語表來源：${TERMBASE}（$(wc -l < "$TERMBASE" | tr -d ' ') 條）"
 say "GitHub secret 與 variables 會寫到：$GH_REPO"
 confirm "這是你的 fork 嗎？" || stop "請用 GH_REPO=owner/name 重新執行。"
 
@@ -267,9 +267,9 @@ note "專案 ID 全球唯一，6–30 個字元，只能用小寫英文、數字
 ask GCP_PROJECT "專案 ID："
 [[ -n "$GCP_PROJECT" ]] || stop "沒有輸入專案 ID。"
 if gcloud projects describe "$GCP_PROJECT" >/dev/null 2>&1; then
-  say "找到既有專案 $GCP_PROJECT。"
+  say "找到既有專案 ${GCP_PROJECT}。"
 else
-  confirm "找不到 $GCP_PROJECT，要新建這個專案嗎？" || stop "已取消。"
+  confirm "找不到 ${GCP_PROJECT}，要新建這個專案嗎？" || stop "已取消。"
   run gcloud projects create "$GCP_PROJECT" --name="AngKorGit zh-TW"
 fi
 write_env GCP_PROJECT "$GCP_PROJECT"
@@ -293,7 +293,7 @@ run gcloud services enable translate.googleapis.com storage.googleapis.com --pro
 pause
 
 stage "上傳術語表到 Cloud Storage"
-say "術語表資源必須從 Cloud Storage 的檔案建立，bucket 放在 $REGION。"
+say "術語表資源必須從 Cloud Storage 的檔案建立，bucket 放在 ${REGION}。"
 note "bucket 名稱全球唯一。直接按 Enter 會用 ${GCP_PROJECT}-termbase。"
 ask GCS_BUCKET "bucket 名稱："
 [[ -n "$GCS_BUCKET" ]] || GCS_BUCKET="${GCP_PROJECT}-termbase"
@@ -317,7 +317,7 @@ if [[ "$(api GET "/glossaries/$GLOSSARY_ID")" == "200" ]]; then
   say "術語表 $GLOSSARY_ID 已存在，共 $(jq -r '.entryCount // "?"' "$TMP/out.json") 條。"
   if confirm "要用剛上傳的 termbase.csv 重建嗎？（會先刪除舊的）"; then
     code=$(api DELETE "/glossaries/$GLOSSARY_ID")
-    [[ "$code" == 2* ]] || { cat "$TMP/out.json"; stop "刪除術語表失敗（HTTP $code）。"; }
+    [[ "$code" == 2* ]] || { cat "$TMP/out.json"; stop "刪除術語表失敗（HTTP ${code}）。"; }
     printf '  等待刪除完成'
     wait_for 404 "/glossaries/$GLOSSARY_ID" || stop "等待刪除逾時，稍後再重跑。"
   else
@@ -329,7 +329,7 @@ if (( BUILD )); then
     '{name: $name, languagePair: {sourceLanguageCode: "en", targetLanguageCode: "zh-TW"}, inputConfig: {gcsSource: {inputUri: $uri}}}' \
     > "$TMP/glossary.json"
   code=$(api POST "/glossaries" -d "@$TMP/glossary.json")
-  [[ "$code" == 2* ]] || { cat "$TMP/out.json"; stop "建立術語表失敗（HTTP $code）。"; }
+  [[ "$code" == 2* ]] || { cat "$TMP/out.json"; stop "建立術語表失敗（HTTP ${code}）。"; }
   printf '  等待術語表建立完成'
   wait_for 200 "/glossaries/$GLOSSARY_ID" || stop "等待建立逾時；請到 Cloud Console 查看術語表的錯誤訊息後重跑。"
   say "術語表 $GLOSSARY_ID 已建立，共 $(jq -r '.entryCount // "?"' "$TMP/out.json") 條。"
@@ -384,7 +384,7 @@ if (( VERIFIED )); then
   note "術語表有生效的話，應該會看到「貯存」與「重定基底」。"
 else
   cat "$TMP/out.json"
-  warn "翻譯請求失敗（HTTP $code），請依上面的錯誤訊息處理後重跑這支腳本。"
+  warn "翻譯請求失敗（HTTP ${code}），請依上面的錯誤訊息處理後重跑這支腳本。"
   SKIPPED+=("翻譯驗證未通過")
 fi
 rm -f "$TMP/key.json"
