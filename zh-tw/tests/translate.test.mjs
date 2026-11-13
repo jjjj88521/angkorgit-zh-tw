@@ -87,6 +87,16 @@ test('chat retries 429 and surfaces other errors', async () => {
   let n = 0;
   const flaky = async () => (++n === 1 ? { ok: false, status: 429, text: async () => 'slow down' } : reply('ok')());
   assert.equal(await chat({ apiKey: 'k', model: 'm', session: 's', messages: [] }, flaky), 'ok');
+  let m = 0;
+  const dropped = async () => {
+    if (++m === 1) throw new TypeError('fetch failed', { cause: { code: 'UND_ERR_SOCKET' } });
+    return reply('ok')();
+  };
+  assert.equal(await chat({ apiKey: 'k', model: 'm', session: 's', messages: [] }, dropped), 'ok');
+  const down = async () => {
+    throw new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } });
+  };
+  await assert.rejects(chat({ apiKey: 'k', model: 'm', session: 's', messages: [] }, down, 1), /fetch failed \(ECONNRESET\)/);
   const denied = async () => ({ ok: false, status: 403, text: async () => 'forbidden' });
   await assert.rejects(chat({ apiKey: 'k', model: 'm', session: 's', messages: [] }, denied), /403.*forbidden/);
 });

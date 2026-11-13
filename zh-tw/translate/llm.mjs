@@ -85,16 +85,24 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function chat({ apiKey, model, session, messages }, fetchImpl = fetch, attempts = 3) {
   for (let attempt = 1; ; attempt++) {
-    const response = await fetchImpl(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        'x-opencode-session': session,
-      },
-      body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: 8192 }),
-    });
+    let response;
+    try {
+      response = await fetchImpl(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'User-Agent': USER_AGENT,
+          'x-opencode-session': session,
+        },
+        body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: 8192 }),
+      });
+    } catch (error) {
+      const cause = error.cause?.code ?? error.cause?.message ?? '';
+      if (attempt >= attempts) throw new Error(`${model} request failed: ${error.message}${cause ? ` (${cause})` : ''}`);
+      await sleep(2000 * attempt);
+      continue;
+    }
     if (response.ok) {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
