@@ -1,0 +1,195 @@
+name: zh-TW upstream sync
+
+# Merges each new upstream release into a branch, drafts translations for new strings
+# and opens a pull request into main for copy review.
+#
+# Needs two secrets:
+#   ZHTW_SYNC_TOKEN   fine-grained PAT for this repository with Contents, Pull requests and
+#                     Workflows write. GITHUB_TOKEN cannot push a merge that touches upstream's
+#                     .github/workflows, and pull requests it opens do not trigger CI.
+#   OPENCODE_API_KEY  OpenCode Go key for the translation drafts.
+#
+# The prepare job runs upstream code (dependencies, the merged sources), so it never sees the PAT.
+# The publish job only runs git and gh on the prepared bundle.
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Upstream tag to sync, such as v0.28.0 (defaults to the latest upstream release)
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zh-tw-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: cheat2001/angkorgit
+
+jobs:
+  prepare:
+    name: Merge upstream and draft translations
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.pick.outputs.run }}
+      resume: ${{ steps.pick.outputs.resume }}
+      tag: ${{ steps.pick.outputs.tag }}
+      branch: ${{ steps.pick.outputs.branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pick the upstream release
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${INPUT_TAG:-$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)}"
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Not an upstream release tag: $tag"
+            exit 1
+          fi
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" "+refs/tags/$tag:refs/tags/$tag"
+          branch="sync/upstream-$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$tag" HEAD; then
+            echo "main already contains $tag"
+          elif git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            # A closed pull request counts too, so a rejected sync is not reopened every day.
+            prs="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state all --json number --jq length)"
+            if [ "$prs" = 0 ]; then
+              echo "$branch exists without a pull request; opening one"
+              echo "resume=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$branch already has a pull request"
+            fi
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge the upstream release
+        if: steps.pick.outputs.run == 'true'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          git config user.name "zh-TW sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          # The fork only adds files, so a conflict means a fork file was changed by mistake.
+          git merge --no-ff --no-edit -m "chore(sync): merge upstream $TAG" "$TAG"
+
+      - uses: pnpm/action-setup@v4
+        if: steps.pick.outputs.run == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.pick.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.pick.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Update the locale keys
+        id: keys
+        if: steps.pick.outputs.run == 'true'
+        run: |
+          cp zh-tw/locales/zh-TW.json "$RUNNER_TEMP/before.json"
+          # A failing transform still opens the pull request, so the rule fix happens on this branch.
+          if node zh-tw/scripts/apply.mjs --sync-locale > "$RUNNER_TEMP/apply.log" 2>&1; then
+            rm "$RUNNER_TEMP/apply.log"
+            node zh-tw/scripts/apply.mjs --report "$RUNNER_TEMP/report.json"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/apply.log"
+          fi
+
+      - name: Draft translations
+        if: steps.keys.outputs.ok == 'true'
+        continue-on-error: true
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: node zh-tw/scripts/translate.mjs
+
+      - name: Bundle the branch and the pull request body
+        if: steps.pick.outputs.run == 'true'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          node zh-tw/scripts/check-locale.mjs > "$RUNNER_TEMP/check.txt" 2>&1 || true
+          node zh-tw/scripts/sync-report.mjs --tag "$TAG" \
+            --before "$RUNNER_TEMP/before.json" --after zh-tw/locales/zh-TW.json \
+            --report "$RUNNER_TEMP/report.json" --check "$RUNNER_TEMP/check.txt" \
+            --failure "$RUNNER_TEMP/apply.log" > "$RUNNER_TEMP/out/body.md"
+          git add zh-tw/locales/zh-TW.json
+          git diff --cached --quiet || git commit -m "chore(zh-tw): sync locale for upstream $TAG"
+          git bundle create "$RUNNER_TEMP/out/sync.bundle" "main..$BRANCH"
+
+      - name: Describe the existing branch
+        if: steps.pick.outputs.resume == 'true'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          git fetch --no-tags origin "$BRANCH"
+          git show FETCH_HEAD:zh-tw/locales/zh-TW.json > "$RUNNER_TEMP/after.json"
+          node zh-tw/scripts/sync-report.mjs --tag "$TAG" \
+            --before zh-tw/locales/zh-TW.json --after "$RUNNER_TEMP/after.json" > "$RUNNER_TEMP/out/body.md"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.pick.outputs.run == 'true' || steps.pick.outputs.resume == 'true'
+        with:
+          name: sync
+          path: ${{ runner.temp }}/out
+          retention-days: 7
+
+  publish:
+    name: Push the branch and open the pull request
+    needs: prepare
+    if: needs.prepare.outputs.run == 'true' || needs.prepare.outputs.resume == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sync
+          path: ${{ runner.temp }}/sync
+
+      - name: Push and open the pull request
+        env:
+          GH_TOKEN: ${{ secrets.ZHTW_SYNC_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          REPO: ${{ github.repository }}
+          RESUME: ${{ needs.prepare.outputs.resume }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Add the ZHTW_SYNC_TOKEN secret (see the comment at the top of this workflow)."
+            exit 1
+          fi
+          if [ "$RESUME" != true ]; then
+            git fetch "$RUNNER_TEMP/sync/sync.bundle" "$BRANCH:$BRANCH"
+            auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push "https://github.com/$REPO.git" "$BRANCH"
+          fi
+          gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "zh-TW：同步上游 $TAG" --body-file "$RUNNER_TEMP/sync/body.md"
