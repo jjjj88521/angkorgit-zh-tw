@@ -67,6 +67,10 @@ const items = wanted.map((source) => {
   return { source, where: locs.slice(0, 2).join(', '), code: locs[0] ? sourceLine(locs[0]) : '' };
 });
 const termbase = parseTermbase(fs.readFileSync(path.join(overlay, 'termbase.csv'), 'utf8'));
+const rules = JSON.parse(fs.readFileSync(path.join(overlay, 'transform/rules.json'), 'utf8'));
+const prefixes = (rules.prefixConstraints ?? [])
+  .map(({ prefix }) => ({ en: prefix, zh: locale[prefix] }))
+  .filter(({ zh }) => zh);
 const session = `ses_angkorgit_zhtw_${Date.now().toString(36)}`;
 const results = outFile && fs.existsSync(outFile) ? JSON.parse(fs.readFileSync(outFile, 'utf8')) : {};
 const rejected = [];
@@ -75,7 +79,7 @@ let done = 0;
 for (const batch of batches(items)) {
   let drafts;
   try {
-    drafts = await translateBatch(batch, { apiKey: key, model, session, termbase });
+    drafts = await translateBatch(batch, { apiKey: key, model, session, termbase, prefixes });
   } catch (error) {
     console.error(`batch of ${batch.length} failed: ${error.message}`);
     batch.forEach((item) => rejected.push(`${JSON.stringify(item.source)}: batch failed`));

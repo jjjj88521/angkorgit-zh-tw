@@ -11,6 +11,10 @@ test('placeholders must match; English plural slots must be dropped', () => {
   assert.match(placeholderProblem('Push {{0}}', '推送 {{0}} {{1}}'), /uses \{\{1\}\}/);
   assert.equal(placeholderProblem('{{0}} commit{{1}} to push', '{{0}} 個提交待推送'), null);
   assert.match(placeholderProblem('{{0}} commit{{1}}', '{{0}} 提交{{1}}'), /plural slot \{\{1\}\}/);
+  assert.match(placeholderProblem('AngKorGit v{{0}}', 'AngKorGit v'), /missing \{\{0\}\}/);
+  assert.equal(normalize('AngKorGit v{{0}}', 'AngKorGit v{{0}}'), 'AngKorGit v{{0}}');
+  assert.match(placeholderProblem('Make default for', '將 {account.host} 設為預設'), /braces/);
+  assert.equal(placeholderProblem('Use {braces} here', '在此使用 {braces}'), null);
 });
 
 test('Mainland wording is reported as a warning, never an error', () => {
@@ -45,6 +49,8 @@ test('termbase parses into pairs, and the system prompt carries terms and Mainla
   assert.match(prompt, /stash → 貯存/);
   assert.match(prompt, /文件→檔案/);
   assert.match(prompt, /\{"t": \{"<id>"/);
+  assert.doesNotMatch(prompt, /first word/);
+  assert.match(systemPrompt(terms, [{ en: 'Pull', zh: '拉取' }]), /"Pull" → "拉取"/);
 });
 
 test('user prompt numbers items from 1 and keeps their context', () => {

@@ -7,16 +7,19 @@ export const MAINLAND_TERMS = {
   鼠標: '滑鼠', 菜單: '選單', 文本: '文字', 數據: '資料', 視頻: '影片', 屏幕: '螢幕', 窗口: '視窗', 鏈接: '連結',
   賬戶: '帳戶', 賬號: '帳號', 刷新: '重新整理', 粘貼: '貼上', 拷貝: '複製', 緩存: '快取', 字符: '字元', 字符串: '字串',
   變量: '變數', 函數: '函式', 運行: '執行', 加載: '載入', 卸載: '解除安裝', 激活: '啟用', 創建: '建立', 導入: '匯入',
-  導出: '匯出', 質量: '品質', 硬件: '硬體', 軟件: '軟體', 調用: '呼叫', 返回: '傳回', 配置: '組態',
+  導出: '匯出', 質量: '品質', 硬件: '硬體', 軟件: '軟體', 調用: '呼叫', 配置: '組態',
 };
 
 // A placeholder glued to the end of a word is a suffix slot (the "s" in `commit{{1}}`), which Chinese drops.
+// One- or two-letter prefixes such as the "v" in `v{{0}}` are not words, so those placeholders stay.
+const isSuffixSlot = (source, index) => /[A-Za-z]{3}$/.test(source.slice(0, index));
+
 function requiredPlaceholders(source) {
-  return [...source.matchAll(PLACEHOLDER)].filter((m) => !/[A-Za-z]/.test(source[m.index - 1] ?? '')).map((m) => m[0]);
+  return [...source.matchAll(PLACEHOLDER)].filter((m) => !isSuffixSlot(source, m.index)).map((m) => m[0]);
 }
 
 export function suffixSlots(source) {
-  return [...source.matchAll(PLACEHOLDER)].filter((m) => /[A-Za-z]/.test(source[m.index - 1] ?? '')).map((m) => m[0]);
+  return [...source.matchAll(PLACEHOLDER)].filter((m) => isSuffixSlot(source, m.index)).map((m) => m[0]);
 }
 
 export function placeholderProblem(source, target) {
@@ -28,6 +31,9 @@ export function placeholderProblem(source, target) {
   if (missing.length) return `is missing ${[...new Set(missing)].join(', ')}`;
   const slots = suffixSlots(source).filter((p) => used.has(p));
   if (slots.length) return `keeps the English plural slot ${slots.join(', ')}`;
+  // A model that sees the JSX line may copy `{account.host}` into the text, where it would render literally.
+  const braces = (text) => /[{}]/.test(text.replace(PLACEHOLDER, ''));
+  if (braces(target) && !braces(source)) return 'contains braces that are not placeholders';
   return null;
 }
 

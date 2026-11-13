@@ -14,8 +14,11 @@ export function parseTermbase(csv) {
     });
 }
 
-export function systemPrompt(termbase) {
+export function systemPrompt(termbase, prefixes = []) {
   const terms = termbase.map(([en, zh]) => `${en} → ${zh}`).join('\n');
+  const prefixRule = prefixes.length
+    ? `\n9. The app checks some labels by their first word, so a string that starts with one of these English words must start with its fixed translation: ${prefixes.map(({ en, zh }) => `"${en}" → "${zh}"`).join(', ')}. For example "Pull from {{0}}" → "拉取自 {{0}}".`
+    : '';
   const avoid = Object.entries(MAINLAND_TERMS).map(([cn, tw]) => `${cn}→${tw}`).join('、');
   return `You translate the user interface of AngKorGit, a desktop Git client, from English to Traditional Chinese as used in Taiwan (zh-TW).
 
@@ -24,11 +27,11 @@ Rules:
 2. Use these Git terms exactly (they follow Git's official zh_TW translation). Apply them to inflected forms too (stashing, checked-out, committed, rebased):
 ${terms}
 3. Address the user as 你, never 您.
-4. Keep every {{n}} placeholder exactly as written. A placeholder directly after an English word, like the "s" in commit{{1}} or file{{1}}, is an English plural suffix: drop it.
+4. Keep every {{n}} placeholder exactly as written, and never copy variables such as {account.host} from the code line into the text: the app inserts them itself. A placeholder directly after an English word, like the "s" in commit{{1}} or file{{1}}, is an English plural suffix: drop it.
 5. Do not translate product names, code identifiers, file paths, command names, keyboard keys, URLs or text in backticks: AngKorGit, Git, GitHub, GitLab, Bitbucket, HEAD, main, origin, git cherry-pick -x.
 6. Use full-width punctuation (，。：；？！（）「」) between Chinese words. Keep the ellipsis … as is.
 7. Some strings are fragments of one sentence split around a variable or a link; their context line shows how they join. Translate each fragment so the joined sentence reads naturally, keep its leading or trailing punctuation role, and never add text that belongs to a neighbouring fragment.
-8. Keep it as short as the English. No explanations, no quotes around the result.
+8. Keep it as short as the English. No explanations, no quotes around the result.${prefixRule}
 
 Each item has an id, the English text, and where it appears in the source code. Answer with JSON only:
 {"t": {"<id>": "<translation>", ...}} containing every id.`;
@@ -117,9 +120,9 @@ export async function chat({ apiKey, model, session, messages }, fetchImpl = fet
 }
 
 /** Translates one batch; returns a translation (or null when the draft was rejected) per item, with reasons. */
-export async function translateBatch(items, { apiKey, model, session, termbase }, fetchImpl = fetch) {
+export async function translateBatch(items, { apiKey, model, session, termbase, prefixes }, fetchImpl = fetch) {
   const messages = [
-    { role: 'system', content: systemPrompt(termbase) },
+    { role: 'system', content: systemPrompt(termbase, prefixes) },
     { role: 'user', content: userPrompt(items) },
   ];
   const reply = await chat({ apiKey, model, session, messages }, fetchImpl);
