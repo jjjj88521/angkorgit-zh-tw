@@ -58,11 +58,11 @@ export function parseReply(text, count) {
 }
 
 // The model decides wording; whitespace at the edges and English plural slots are restored by code.
-export function normalize(source, target) {
+export function normalize(source, target, textSlot = false) {
   const lead = source.match(/^\s*/)[0];
   const trail = source.match(/\s*$/)[0];
   let text = target.trim();
-  for (const slot of suffixSlots(source)) text = text.split(slot).join('');
+  for (const slot of suffixSlots(source, textSlot)) text = text.split(slot).join('');
   return lead + text + trail;
 }
 
@@ -120,7 +120,7 @@ export async function chat({ apiKey, model, session, messages }, fetchImpl = fet
 }
 
 /** Translates one batch; returns a translation (or null when the draft was rejected) per item, with reasons. */
-export async function translateBatch(items, { apiKey, model, session, termbase, prefixes }, fetchImpl = fetch) {
+export async function translateBatch(items, { apiKey, model, session, termbase, prefixes, textSlots = [] }, fetchImpl = fetch) {
   const messages = [
     { role: 'system', content: systemPrompt(termbase, prefixes) },
     { role: 'user', content: userPrompt(items) },
@@ -130,8 +130,9 @@ export async function translateBatch(items, { apiKey, model, session, termbase, 
   return raw.map((target, i) => {
     const source = items[i].source;
     if (target === null) return { target: null, reason: 'missing from the reply' };
-    const text = normalize(source, target);
-    const problem = placeholderProblem(source, text);
+    const textSlot = textSlots.includes(source);
+    const text = normalize(source, target, textSlot);
+    const problem = placeholderProblem(source, text, textSlot);
     return problem ? { target: null, reason: `draft ${problem}` } : { target: text };
   });
 }

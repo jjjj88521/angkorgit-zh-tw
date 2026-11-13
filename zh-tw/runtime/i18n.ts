@@ -43,6 +43,11 @@ export function __s(suffix: string): string {
   return locale === 'en' ? suffix : '';
 }
 
+// "2 commits" in English, "2 個提交" in Chinese; `noun` arrives already translated.
+export function __n(count: number, noun: string, plural: string): string {
+  return locale === 'en' ? `${count} ${noun}${plural}` : `${count} 個${noun}`;
+}
+
 export function __t(source: string, params?: readonly unknown[]): string {
   const template = locale === 'en' ? source : translations[source] || source;
   if (!params) return template;

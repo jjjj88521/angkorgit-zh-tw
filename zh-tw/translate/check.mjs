@@ -12,24 +12,25 @@ export const MAINLAND_TERMS = {
 
 // A placeholder glued to the end of a word is a suffix slot (the "s" in `commit{{1}}`), which Chinese drops.
 // One- or two-letter prefixes such as the "v" in `v{{0}}` are not words, so those placeholders stay.
-const isSuffixSlot = (source, index) => /[A-Za-z]{3}$/.test(source.slice(0, index));
+// `textSlot` marks keys whose glued placeholder is text, like the " in repo" of `Committed{{0}}`.
+const isSuffixSlot = (source, index, textSlot) => !textSlot && /[A-Za-z]{3}$/.test(source.slice(0, index));
 
-function requiredPlaceholders(source) {
-  return [...source.matchAll(PLACEHOLDER)].filter((m) => !isSuffixSlot(source, m.index)).map((m) => m[0]);
+function requiredPlaceholders(source, textSlot) {
+  return [...source.matchAll(PLACEHOLDER)].filter((m) => !isSuffixSlot(source, m.index, textSlot)).map((m) => m[0]);
 }
 
-export function suffixSlots(source) {
-  return [...source.matchAll(PLACEHOLDER)].filter((m) => isSuffixSlot(source, m.index)).map((m) => m[0]);
+export function suffixSlots(source, textSlot = false) {
+  return [...source.matchAll(PLACEHOLDER)].filter((m) => isSuffixSlot(source, m.index, textSlot)).map((m) => m[0]);
 }
 
-export function placeholderProblem(source, target) {
+export function placeholderProblem(source, target, textSlot = false) {
   const allowed = new Set(source.match(PLACEHOLDER) ?? []);
   const used = new Set(target.match(PLACEHOLDER) ?? []);
   const unknown = [...used].filter((p) => !allowed.has(p));
   if (unknown.length) return `uses ${unknown.join(', ')} which the source does not have`;
-  const missing = requiredPlaceholders(source).filter((p) => !used.has(p));
+  const missing = requiredPlaceholders(source, textSlot).filter((p) => !used.has(p));
   if (missing.length) return `is missing ${[...new Set(missing)].join(', ')}`;
-  const slots = suffixSlots(source).filter((p) => used.has(p));
+  const slots = suffixSlots(source, textSlot).filter((p) => used.has(p));
   if (slots.length) return `keeps the English plural slot ${slots.join(', ')}`;
   // A model that sees the JSX line may copy `{account.host}` into the text, where it would render literally.
   const braces = (text) => /[{}]/.test(text.replace(PLACEHOLDER, ''));
@@ -49,12 +50,12 @@ export const missingKeys = (locale) => Object.keys(locale).filter((key) => !loca
  * Checks translated entries. `prefixConstraints` exist because upstream compares a label with
  * `label.startsWith('Pull')`: once both sides are translated the prefix has to survive.
  */
-export function checkLocale(locale, { prefixConstraints = [] } = {}) {
+export function checkLocale(locale, { prefixConstraints = [], textSlots = [] } = {}) {
   const errors = [];
   const warnings = [];
   for (const [source, target] of Object.entries(locale)) {
     if (!target) continue;
-    const problem = placeholderProblem(source, target);
+    const problem = placeholderProblem(source, target, textSlots.includes(source));
     if (problem) errors.push(`${JSON.stringify(source)}: translation ${problem}`);
     const terms = mainlandWarnings(target);
     if (terms.length) warnings.push(`${JSON.stringify(source)}: ${terms.map((t) => `${t} → ${MAINLAND_TERMS[t]}`).join(', ')}`);

@@ -10,6 +10,7 @@ test('inject adds code around a unique anchor and its import at the top', () => 
   assert.equal(injectSource('a.tsx', 'x\n<Fonts />\ny', edits), "import { Lang } from './Lang';\nx\n<Fonts />\n<Lang />\ny");
   assert.equal(injectSource('b.ts', '[\n  { id: 2 },\n]', edits), '[\n  { id: 1 },\n  { id: 2 },\n]');
   assert.equal(injectSource('c.ts', 'same', edits), 'same');
+  assert.equal(injectSource('d.tsx', 'a <b /> c', [{ file: 'd.tsx', anchor: '<b />', replace: '<i />' }]), 'a <i /> c');
 });
 
 test('inject fails when the anchor is missing or ambiguous', () => {

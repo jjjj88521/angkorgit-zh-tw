@@ -18,6 +18,11 @@ test('placeholders must match; English plural slots must be dropped', () => {
   assert.match(placeholderProblem('Model', '模型 <span className="x">· 說明</span>'), /markup/);
   assert.match(placeholderProblem('Back to graph', '返回圖表 <Kbd>Esc</Kbd>'), /markup/);
   assert.equal(placeholderProblem('Use a < b', '使用 a < b'), null);
+  assert.equal(placeholderProblem('Committed{{0}}', '已提交{{0}}', true), null);
+  assert.match(placeholderProblem('Committed{{0}}', '已提交', true), /missing \{\{0\}\}/);
+  assert.equal(normalize('Committed{{0}}', '已提交{{0}}', true), '已提交{{0}}');
+  const { errors } = checkLocale({ 'Committed{{0}}': '已提交{{0}}' }, { textSlots: ['Committed{{0}}'] });
+  assert.equal(errors.length, 0);
 });
 
 test('Mainland wording is reported as a warning, never an error', () => {

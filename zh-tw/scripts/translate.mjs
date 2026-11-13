@@ -79,7 +79,7 @@ let done = 0;
 for (const batch of batches(items)) {
   let drafts;
   try {
-    drafts = await translateBatch(batch, { apiKey: key, model, session, termbase, prefixes });
+    drafts = await translateBatch(batch, { apiKey: key, model, session, termbase, prefixes, textSlots: rules.textSlots });
   } catch (error) {
     console.error(`batch of ${batch.length} failed: ${error.message}`);
     batch.forEach((item) => rejected.push(`${JSON.stringify(item.source)}: batch failed`));

@@ -52,12 +52,17 @@
     { "file": "features/settings/SettingsDialog\\.tsx$", "texts": ["Settings", "https:// remotes use accounts · git@ remotes use SSH keys"] },
     { "file": "features/repository/GroupUpdateDialog\\.tsx$", "texts": ["Updated", "Skipped", "Failed", "Partial", "Cancelled", "Unchanged"] },
     { "file": "features/repository/WelcomePage\\.tsx$", "texts": ["Other", "Pulling group…", "Fetching group…"] },
-    { "file": "features/settings/FontsCard\\.tsx$", "texts": ["Monospace", "Fonts", "same as Code"] },
+    { "file": "features/settings/FontsCard\\.tsx$", "texts": ["Monospace", "Fonts", "same as Code", "default"] },
     { "file": "features/sidebar/Sidebar\\.tsx$", "texts": ["folder missing", "no branch"] },
     { "file": "features/settings/AccountsTab\\.tsx$", "texts": ["Reconnected", "Connected"] },
     { "file": "components/FileTree\\.tsx$", "texts": ["Collapse", "Expand"] },
     { "file": "components/ChangeMark\\.tsx$", "texts": ["modified", "added", "deleted", "renamed"] },
-    { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] }
+    { "file": "features/commit/commitWork\\.ts$", "texts": ["commit \"{{0}}\"", "Committed{{0}}", " in {{0}}"] },
+    { "file": "features/repository/RepoDialogs\\.tsx$", "texts": ["create branch {{0}}", "rename {{0}} → {{1}}"] },
+    { "file": "features/inspector/CommitDetails\\.tsx$", "texts": ["edit commit message"] },
+    { "file": "features/graph/InteractiveRebaseDialog\\.tsx$", "texts": ["interactive rebase"] },
+    { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] },
+    { "file": "components/PullCheckDialog\\.tsx$", "texts": ["commit", "new commit", "file"] }
   ],
   "inject": {
     "files": [{ "from": "runtime/LanguageCard.tsx", "to": "apps/desktop/src/features/settings/ZhtwLanguageCard.tsx" }],
@@ -78,9 +83,21 @@
         "anchor": "${card.keywords}",
         "after": " ${zhtwText(SETTINGS_SECTION_LABELS[card.section])} ${card.titles.map(zhtwText).join(' ')}",
         "import": "import { zhtwText } from '../zhtw-i18n';"
+      },
+      {
+        "file": "apps/desktop/src/components/HookFailedDialog.tsx",
+        "anchor": "A hook stopped the {failure?.operation ?? 'commit'}",
+        "replace": "{failure?.operation === 'push' ? 'A hook stopped the push' : failure?.operation === 'amend' ? 'A hook stopped the amend' : 'A hook stopped the commit'}"
+      },
+      {
+        "file": "apps/desktop/src/components/PullCheckDialog.tsx",
+        "anchor": "return `${n} ${noun}${n === 1 ? '' : 's'}`;",
+        "replace": "return __n(n, noun, n === 1 ? '' : 's');",
+        "import": "import { __n } from '../../../../packages/core/src/zhtw-i18n';"
       }
     ]
   },
+  "textSlots": ["Committed{{0}}", "Commit amended{{0}}", "Commit failed{{0}}: {{1}}"],
   "prefixConstraints": [{ "prefix": "Pull", "except": "^Pull requests?\\b" }],
   "keep": {
     "exact": ["AngKorGit", "AngKor", "Git", "GitHub", "GitLab", "Bitbucket", "English"],
