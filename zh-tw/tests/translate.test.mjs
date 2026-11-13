@@ -1,74 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { batches, checkLocale, decode, encode, placeholderProblem, translateBatch } from '../translate/lib.mjs';
+import { checkLocale, mainlandWarnings, placeholderProblem } from '../translate/check.mjs';
+import { ENDPOINT, USER_AGENT, batches, chat, normalize, parseReply, parseTermbase, systemPrompt, translateBatch, userPrompt } from '../translate/llm.mjs';
 
-test('encode protects placeholders, escapes markup and keeps outer whitespace aside', () => {
-  assert.deepEqual(encode(' Push {{0}} to <{{1}}> & wait\n'), {
-    html: 'Push <span translate="no">{{0}}</span> to &lt;<span translate="no">{{1}}</span>&gt; &amp; wait',
-    lead: ' ',
-    trail: '\n',
-  });
-});
+const reply = (content) => async () => ({ ok: true, json: async () => ({ choices: [{ message: { content } }] }) });
 
-test('decode restores placeholders, line breaks, entities and outer whitespace', () => {
-  const html = '推送 <span translate="no"> {{0}} </span> 到 &lt;<span translate="no">{{1}}</span>&gt;<br>完成 &amp; 等待';
-  assert.equal(decode(html, ' ', '\n'), ' 推送 {{0}} 到 <{{1}}>\n完成 & 等待\n');
-});
-
-test('a string survives an identity round trip', () => {
-  for (const source of ['Delete "{{0}}"?', ', will conflict', 'A <b> tag & more\nsecond line', '{{0}}m ago']) {
-    const { html, lead, trail } = encode(source);
-    assert.equal(decode(html, lead, trail), source);
-  }
-});
-
-test('batches split on count and on characters', () => {
-  assert.deepEqual(batches(['a', 'b', 'c'], 2), [['a', 'b'], ['c']]);
-  assert.deepEqual(batches(['aaaa', 'bbbb', 'c'], 50, 6), [['aaaa'], ['bbbb', 'c']]);
-});
-
-test('translateBatch sends the glossary request and prefers glossary translations', async () => {
-  const calls = [];
-  const fetchImpl = async (url, init) => {
-    calls.push({ url, init, body: JSON.parse(init.body) });
-    return {
-      ok: true,
-      json: async () => ({
-        translations: [{ translatedText: '將 <span translate="no">{{0}}</span> 推' }],
-        glossaryTranslations: [{ translatedText: '推送 <span translate="no">{{0}}</span>' }],
-      }),
-    };
-  };
-  const out = await translateBatch(['Push {{0}}'], { project: 'p', token: 't', glossary: 'git-zh-tw' }, fetchImpl);
-  assert.deepEqual(out, ['推送 {{0}}']);
-  assert.equal(calls[0].url, 'https://translation.googleapis.com/v3/projects/p/locations/us-central1:translateText');
-  assert.equal(calls[0].init.headers.Authorization, 'Bearer t');
-  assert.deepEqual(calls[0].body, {
-    sourceLanguageCode: 'en',
-    targetLanguageCode: 'zh-TW',
-    mimeType: 'text/html',
-    contents: ['Push <span translate="no">{{0}}</span>'],
-    glossaryConfig: { glossary: 'projects/p/locations/us-central1/glossaries/git-zh-tw', ignoreCase: true },
-  });
-});
-
-test('translateBatch works without a glossary and surfaces API errors', async () => {
-  const ok = async (_, init) => {
-    assert.equal('glossaryConfig' in JSON.parse(init.body), false);
-    return { ok: true, json: async () => ({ translations: [{ translatedText: '取消' }] }) };
-  };
-  assert.deepEqual(await translateBatch(['Cancel'], { project: 'p', token: 't' }, ok), ['取消']);
-  const denied = async () => ({ ok: false, status: 403, text: async () => 'PERMISSION_DENIED' });
-  await assert.rejects(translateBatch(['Cancel'], { project: 'p', token: 't' }, denied), /403.*PERMISSION_DENIED/);
-  const short = async () => ({ ok: true, json: async () => ({ translations: [] }) });
-  await assert.rejects(translateBatch(['Cancel'], { project: 'p', token: 't' }, short), /0 results for 1 strings/);
-});
-
-test('placeholders must match, except a suffix slot glued to a word', () => {
+test('placeholders must match; English plural slots must be dropped', () => {
   assert.equal(placeholderProblem('Push {{0}} to {{1}}', '將 {{0}} 推送到 {{1}}'), null);
   assert.match(placeholderProblem('Push {{0}} to {{1}}', '推送到 {{1}}'), /missing \{\{0\}\}/);
   assert.match(placeholderProblem('Push {{0}}', '推送 {{0}} {{1}}'), /uses \{\{1\}\}/);
   assert.equal(placeholderProblem('{{0}} commit{{1}} to push', '{{0}} 個提交待推送'), null);
+  assert.match(placeholderProblem('{{0}} commit{{1}}', '{{0}} 提交{{1}}'), /plural slot \{\{1\}\}/);
+});
+
+test('Mainland wording is reported as a warning, never an error', () => {
+  assert.deepEqual(mainlandWarnings('打開這個文件'), ['文件', '打開']);
+  const { errors, warnings } = checkLocale({ 'Open file': '打開文件' });
+  assert.equal(errors.length, 0);
+  assert.match(warnings[0], /文件 → 檔案, 打開 → 開啟/);
 });
 
 test('checkLocale reports placeholder errors, prefix violations and missing entries', () => {
@@ -77,7 +26,7 @@ test('checkLocale reports placeholder errors, prefix violations and missing entr
     Pull: '拉取',
     'Pull (rebase)': '拉取（重定基底）',
     'Pull from {{0}}': '從 {{0}} 拉取',
-    'Pull requests': 'PR',
+    'Pull requests': '拉取請求',
     'Pulling group…': '正在更新群組…',
     'Push {{0}}': '推送',
     Fetch: '',
@@ -89,7 +38,65 @@ test('checkLocale reports placeholder errors, prefix violations and missing entr
   assert.match(errors[1], /"Pull from \{\{0\}\}".*must start with "拉取"/);
 });
 
-test('prefix constraints wait until the prefix itself is translated', () => {
-  const rules = { prefixConstraints: [{ prefix: 'Pull' }] };
-  assert.deepEqual(checkLocale({ Pull: '', 'Pull (merge)': '合併式拉取' }, rules).errors, []);
+test('termbase parses into pairs, and the system prompt carries terms and Mainland words to avoid', () => {
+  const terms = parseTermbase('stash,貯存\ncherry-pick,揀選\n\n');
+  assert.deepEqual(terms, [['stash', '貯存'], ['cherry-pick', '揀選']]);
+  const prompt = systemPrompt(terms);
+  assert.match(prompt, /stash → 貯存/);
+  assert.match(prompt, /文件→檔案/);
+  assert.match(prompt, /\{"t": \{"<id>"/);
+});
+
+test('user prompt numbers items from 1 and keeps their context', () => {
+  const items = JSON.parse(userPrompt([{ source: 'Push', where: 'a.tsx:3', code: '<b>Push</b>' }]));
+  assert.deepEqual(items, [{ id: '1', en: 'Push', where: 'a.tsx:3', code: '<b>Push</b>' }]);
+});
+
+test('parseReply reads fenced or bare JSON and marks missing ids', () => {
+  assert.deepEqual(parseReply('```json\n{"t": {"1": "推送", "2": "拉取"}}\n```', 2), ['推送', '拉取']);
+  assert.deepEqual(parseReply('Here you go: {"t": {"2": "拉取"}}', 2), [null, '拉取']);
+  assert.throws(() => parseReply('sorry', 1), /no JSON/);
+});
+
+test('normalize restores edge whitespace and removes plural slots', () => {
+  assert.equal(normalize(' Commits stay. ', '提交會保留。'), ' 提交會保留。 ');
+  assert.equal(normalize('{{0}} file{{1}}', ' {{0}} 個檔案{{1}} '), '{{0}} 個檔案');
+});
+
+test('batches split on count and size', () => {
+  const item = (source) => ({ source, code: '' });
+  assert.equal(batches([item('a'), item('b'), item('c')], 2).length, 2);
+  assert.equal(batches([item('aaaa'), item('bbbb'), item('c')], 50, 6).length, 2);
+});
+
+test('chat sends the OpenCode Go request with identity and session headers', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return reply('{"t":{}}')();
+  };
+  await chat({ apiKey: 'k', model: 'm', session: 'ses_x', messages: [] }, fetchImpl);
+  assert.equal(calls[0].url, ENDPOINT);
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer k');
+  assert.equal(calls[0].init.headers['User-Agent'], USER_AGENT);
+  assert.equal(calls[0].init.headers['x-opencode-session'], 'ses_x');
+  assert.equal(JSON.parse(calls[0].init.body).model, 'm');
+});
+
+test('chat retries 429 and surfaces other errors', async () => {
+  let n = 0;
+  const flaky = async () => (++n === 1 ? { ok: false, status: 429, text: async () => 'slow down' } : reply('ok')());
+  assert.equal(await chat({ apiKey: 'k', model: 'm', session: 's', messages: [] }, flaky), 'ok');
+  const denied = async () => ({ ok: false, status: 403, text: async () => 'forbidden' });
+  await assert.rejects(chat({ apiKey: 'k', model: 'm', session: 's', messages: [] }, denied), /403.*forbidden/);
+});
+
+test('translateBatch keeps good drafts and rejects broken ones with a reason', async () => {
+  const items = [{ source: 'Push {{0}}' }, { source: 'Fetch' }, { source: 'Pull' }];
+  const out = await translateBatch(items, { apiKey: 'k', model: 'm', session: 's', termbase: [] }, reply('{"t":{"1":"推送","2":"取得"}}'));
+  assert.deepEqual(out, [
+    { target: null, reason: 'draft is missing {{0}}' },
+    { target: '取得' },
+    { target: null, reason: 'missing from the reply' },
+  ]);
 });

@@ -6,15 +6,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkLocale } from '../translate/lib.mjs';
+import { checkLocale } from '../translate/check.mjs';
 
 const overlay = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const locale = JSON.parse(fs.readFileSync(path.join(overlay, 'locales/zh-TW.json'), 'utf8'));
 const rules = JSON.parse(fs.readFileSync(path.join(overlay, 'transform/rules.json'), 'utf8'));
 
-const { errors, missing } = checkLocale(locale, rules);
+const { errors, warnings, missing } = checkLocale(locale, rules);
 const total = Object.keys(locale).length;
 console.log(`${total - missing.length}/${total} entries translated`);
+for (const warning of warnings) console.warn(`warning: Mainland wording ${warning}`);
 for (const error of errors) console.error(`error: ${error}`);
 
 const incomplete = process.argv.includes('--require-complete') && missing.length > 0;
