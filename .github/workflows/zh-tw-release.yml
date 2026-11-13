@@ -1,0 +1,129 @@
+name: zh-TW release
+
+# Builds the zh-TW app from main and creates a draft release `v<upstream>+zh-TW.N` (ADR 0002).
+# Publish the draft by hand after checking it.
+#
+# Needs ZHTW_UPDATER_KEY and ZHTW_UPDATER_KEY_PASSWORD, created by zh-tw/scripts/updater-key-wizard.sh.
+# The tag is created with GITHUB_TOKEN, so upstream's release.yml (on: push tags v*) does not run.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zh-tw-release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Pick the version
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      upstream: ${{ steps.version.outputs.upstream }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check the release config
+        run: |
+          if grep -q '"RUN ' zh-tw/release/tauri.zh-tw.conf.json; then
+            echo "::error::Run zh-tw/scripts/updater-key-wizard.sh and commit the public key first."
+            exit 1
+          fi
+      - name: Require a complete locale
+        run: node zh-tw/scripts/check-locale.mjs --require-complete
+      - name: Count earlier zh-TW releases
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          upstream="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          version="$({
+            git ls-remote --tags origin | sed 's#.*refs/tags/##'
+            gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName'
+          } | node zh-tw/scripts/release-version.mjs "$upstream")"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$version"
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: version
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+          - platform: ubuntu-latest
+            args: ''
+          # MSI rejects non-numeric build metadata such as +zh-TW.1, so Windows ships NSIS only.
+          - platform: windows-latest
+            args: --bundles nsis
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      UPSTREAM_VERSION: ${{ needs.version.outputs.upstream }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Add macOS universal targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libdbus-1-dev
+      - run: pnpm install --frozen-lockfile
+      - name: Rewrite UI strings
+        run: node zh-tw/scripts/apply.mjs --write
+      - name: Generate icons
+        run: |
+          pnpm icons
+          pnpm --filter @angkorgit/desktop exec tauri icon src-tauri/icons/icon.png
+      - name: Write the zh-TW Tauri config
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const config = JSON.parse(fs.readFileSync("zh-tw/release/tauri.zh-tw.conf.json", "utf8"));
+            config.version = process.env.VERSION;
+            config.plugins.updater.endpoints = [`https://github.com/${process.env.GITHUB_REPOSITORY}/releases/latest/download/latest.json`];
+            fs.writeFileSync("apps/desktop/src-tauri/tauri.zh-tw.conf.json", JSON.stringify(config, null, 2));
+          '
+          cat apps/desktop/src-tauri/tauri.zh-tw.conf.json
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.ZHTW_UPDATER_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.ZHTW_UPDATER_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tagName: v${{ env.VERSION }}
+          releaseName: AngKorGit zh-TW v${{ env.VERSION }}
+          releaseCommitish: ${{ github.sha }}
+          releaseBody: |
+            AngKorGit 繁體中文版，對應上游 [v${{ env.UPSTREAM_VERSION }}](https://github.com/cheat2001/angkorgit/releases/tag/v${{ env.UPSTREAM_VERSION }})。功能與上游相同，只有介面文字不同。
+
+            - 已安裝的繁中版會在 App 內提示更新。
+            - 繁中版與上游版是不同的 App，可以同時安裝，設定不共用。
+            - 安裝檔沒有程式碼簽章：macOS 第一次開啟請按右鍵 →「打開」，Windows 若出現 SmartScreen 請按「其他資訊」→「仍要執行」。
+          releaseDraft: true
+          args: ${{ matrix.args }} --config src-tauri/tauri.zh-tw.conf.json

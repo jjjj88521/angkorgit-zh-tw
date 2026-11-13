@@ -1,0 +1,9 @@
+{
+  "productName": "AngKorGit zh-TW",
+  "identifier": "dev.angkorgit.zhtw",
+  "plugins": {
+    "updater": {
+      "pubkey": "RUN zh-tw/scripts/updater-key-wizard.sh"
+    }
+  }
+}
