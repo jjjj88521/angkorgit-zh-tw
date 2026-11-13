@@ -59,9 +59,25 @@
     { "file": "components/ChangeMark\\.tsx$", "texts": ["modified", "added", "deleted", "renamed"] },
     { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] }
   ],
+  "inject": {
+    "files": [{ "from": "runtime/LanguageCard.tsx", "to": "apps/desktop/src/features/settings/ZhtwLanguageCard.tsx" }],
+    "edits": [
+      {
+        "file": "apps/desktop/src/features/settings/SettingsDialog.tsx",
+        "anchor": "<FontsCard />",
+        "after": "\n                  <ZhtwLanguageCard />",
+        "import": "import { ZhtwLanguageCard } from './ZhtwLanguageCard';"
+      },
+      {
+        "file": "packages/core/src/settings/filter.ts",
+        "anchor": "  { id: 'auto-fetch',",
+        "before": "  { id: 'language', section: 'appearance', titles: ['Language'], keywords: 'locale chinese english traditional 語言 繁體中文 英文' },\n"
+      }
+    ]
+  },
   "prefixConstraints": [{ "prefix": "Pull", "except": "^Pull requests?\\b" }],
   "keep": {
-    "exact": ["AngKorGit", "AngKor", "Git", "GitHub", "GitLab", "Bitbucket"],
+    "exact": ["AngKorGit", "AngKor", "Git", "GitHub", "GitLab", "Bitbucket", "English"],
     "patterns": ["(^|[\\s\"'(])\\d+(\\.\\d+)?px\\b", "<[a-z]+[\\s>]"]
   }
 }
