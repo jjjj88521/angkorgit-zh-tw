@@ -44,6 +44,15 @@ export function mainlandWarnings(target) {
   return Object.keys(MAINLAND_TERMS).filter((term) => target.includes(term));
 }
 
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** `constraint` is `{ en, zh, except }`: sources starting with the word `en` must translate to text starting with `zh`. */
+export function prefixProblem(source, target, { en, zh, except }) {
+  if (source === en || !new RegExp(`^${escapeRegExp(en)}(\\s|\\(|$)`).test(source)) return null;
+  if (except && new RegExp(except).test(source)) return null;
+  return target.startsWith(zh) ? null : `must start with ${JSON.stringify(zh)} (the translation of ${JSON.stringify(en)})`;
+}
+
 export const missingKeys = (locale) => Object.keys(locale).filter((key) => !locale[key]);
 
 /**
@@ -61,15 +70,11 @@ export function checkLocale(locale, { prefixConstraints = [], textSlots = [] } =
     if (terms.length) warnings.push(`${JSON.stringify(source)}: ${terms.map((t) => `${t} → ${MAINLAND_TERMS[t]}`).join(', ')}`);
   }
   for (const { prefix, except } of prefixConstraints) {
-    const translatedPrefix = locale[prefix];
-    if (!translatedPrefix) continue;
-    const applies = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|\\(|$)`);
-    const skip = except ? new RegExp(except) : null;
+    const constraint = { en: prefix, zh: locale[prefix], except };
+    if (!constraint.zh) continue;
     for (const [source, target] of Object.entries(locale)) {
-      if (!target || source === prefix || !applies.test(source) || skip?.test(source)) continue;
-      if (!target.startsWith(translatedPrefix)) {
-        errors.push(`${JSON.stringify(source)}: translation must start with ${JSON.stringify(translatedPrefix)} (the translation of ${JSON.stringify(prefix)})`);
-      }
+      const problem = target && prefixProblem(source, target, constraint);
+      if (problem) errors.push(`${JSON.stringify(source)}: translation ${problem}`);
     }
   }
   return { errors, warnings, missing: missingKeys(locale) };

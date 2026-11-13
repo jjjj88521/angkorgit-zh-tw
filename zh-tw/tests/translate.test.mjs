@@ -124,3 +124,12 @@ test('translateBatch keeps good drafts and rejects broken ones with a reason', a
     { target: null, reason: 'missing from the reply' },
   ]);
 });
+
+test('translateBatch rejects empty drafts and drafts that break a fixed prefix', async () => {
+  const items = [{ source: ' Commits stay. ' }, { source: 'Pull from {{0}}' }, { source: 'Pull requests' }];
+  const prefixes = [{ en: 'Pull', zh: '拉取', except: '^Pull requests?\\b' }];
+  const out = await translateBatch(items, { apiKey: 'k', model: 'm', session: 's', termbase: [], prefixes }, reply('{"t":{"1":" ","2":"從 {{0}} 拉取","3":"合併請求"}}'));
+  assert.deepEqual(out[0], { target: null, reason: 'draft is empty' });
+  assert.match(out[1].reason, /must start with "拉取"/);
+  assert.deepEqual(out[2], { target: '合併請求' });
+});

@@ -81,8 +81,8 @@
       {
         "file": "packages/core/src/settings/filter.ts",
         "anchor": "${card.keywords}",
-        "after": " ${zhtwText(SETTINGS_SECTION_LABELS[card.section])} ${card.titles.map(zhtwText).join(' ')}",
-        "import": "import { zhtwText } from '../zhtw-i18n';"
+        "after": " ${zhtwEnglish(SETTINGS_SECTION_LABELS[card.section])} ${zhtwText(SETTINGS_SECTION_LABELS[card.section])} ${card.titles.map(zhtwText).join(' ')}",
+        "import": "import { zhtwEnglish, zhtwText } from '../zhtw-i18n';"
       },
       {
         "file": "apps/desktop/src/components/HookFailedDialog.tsx",

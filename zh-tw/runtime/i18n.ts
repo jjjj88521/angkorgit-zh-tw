@@ -38,6 +38,14 @@ export function zhtwText(source: string): string {
   return translations[source] || '';
 }
 
+let english: Map<string, string> | null = null;
+
+// The English source of a Chinese text, so search fields keep matching English words in zh-TW.
+export function zhtwEnglish(text: string): string {
+  english ??= new Map(Object.entries(translations).map(([source, target]) => [target, source]));
+  return english.get(text) ?? '';
+}
+
 // English plural endings written next to a translated word, like `change{n === 1 ? '' : 's'}` in JSX.
 export function __s(suffix: string): string {
   return locale === 'en' ? suffix : '';

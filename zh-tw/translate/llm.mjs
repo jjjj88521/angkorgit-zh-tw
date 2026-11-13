@@ -1,4 +1,4 @@
-import { MAINLAND_TERMS, placeholderProblem, suffixSlots } from './check.mjs';
+import { MAINLAND_TERMS, placeholderProblem, prefixProblem, suffixSlots } from './check.mjs';
 
 export const ENDPOINT = 'https://opencode.ai/inference/go/openai/v1/chat/completions';
 export const USER_AGENT = 'angkorgit-zh-tw-translator/0.1';
@@ -120,7 +120,7 @@ export async function chat({ apiKey, model, session, messages }, fetchImpl = fet
 }
 
 /** Translates one batch; returns a translation (or null when the draft was rejected) per item, with reasons. */
-export async function translateBatch(items, { apiKey, model, session, termbase, prefixes, textSlots = [] }, fetchImpl = fetch) {
+export async function translateBatch(items, { apiKey, model, session, termbase, prefixes = [], textSlots = [] }, fetchImpl = fetch) {
   const messages = [
     { role: 'system', content: systemPrompt(termbase, prefixes) },
     { role: 'user', content: userPrompt(items) },
@@ -130,9 +130,10 @@ export async function translateBatch(items, { apiKey, model, session, termbase, 
   return raw.map((target, i) => {
     const source = items[i].source;
     if (target === null) return { target: null, reason: 'missing from the reply' };
+    if (!target.trim()) return { target: null, reason: 'draft is empty' };
     const textSlot = textSlots.includes(source);
     const text = normalize(source, target, textSlot);
-    const problem = placeholderProblem(source, text, textSlot);
+    const problem = placeholderProblem(source, text, textSlot) ?? prefixes.map((p) => prefixProblem(source, text, p)).find(Boolean);
     return problem ? { target: null, reason: `draft ${problem}` } : { target: text };
   });
 }

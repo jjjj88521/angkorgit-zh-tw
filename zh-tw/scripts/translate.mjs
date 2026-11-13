@@ -69,7 +69,7 @@ const items = wanted.map((source) => {
 const termbase = parseTermbase(fs.readFileSync(path.join(overlay, 'termbase.csv'), 'utf8'));
 const rules = JSON.parse(fs.readFileSync(path.join(overlay, 'transform/rules.json'), 'utf8'));
 const prefixes = (rules.prefixConstraints ?? [])
-  .map(({ prefix }) => ({ en: prefix, zh: locale[prefix] }))
+  .map(({ prefix, except }) => ({ en: prefix, zh: locale[prefix], except }))
   .filter(({ zh }) => zh);
 const session = `ses_angkorgit_zhtw_${Date.now().toString(36)}`;
 const results = outFile && fs.existsSync(outFile) ? JSON.parse(fs.readFileSync(outFile, 'utf8')) : {};

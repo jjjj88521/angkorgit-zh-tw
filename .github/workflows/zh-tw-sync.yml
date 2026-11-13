@@ -35,8 +35,12 @@ jobs:
   prepare:
     name: Merge upstream and draft translations
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       run: ${{ steps.pick.outputs.run }}
+      resume: ${{ steps.pick.outputs.resume }}
       tag: ${{ steps.pick.outputs.tag }}
       branch: ${{ steps.pick.outputs.branch }}
     steps:
@@ -64,7 +68,14 @@ jobs:
           if git merge-base --is-ancestor "$tag" HEAD; then
             echo "main already contains $tag"
           elif git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
-            echo "$branch already exists; review or delete it to sync again"
+            # A closed pull request counts too, so a rejected sync is not reopened every day.
+            prs="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state all --json number --jq length)"
+            if [ "$prs" = 0 ]; then
+              echo "$branch exists without a pull request; opening one"
+              echo "resume=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$branch already has a pull request"
+            fi
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
@@ -128,8 +139,20 @@ jobs:
           git diff --cached --quiet || git commit -m "chore(zh-tw): sync locale for upstream $TAG"
           git bundle create "$RUNNER_TEMP/out/sync.bundle" "main..$BRANCH"
 
+      - name: Describe the existing branch
+        if: steps.pick.outputs.resume == 'true'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          git fetch --no-tags origin "$BRANCH"
+          git show FETCH_HEAD:zh-tw/locales/zh-TW.json > "$RUNNER_TEMP/after.json"
+          node zh-tw/scripts/sync-report.mjs --tag "$TAG" \
+            --before zh-tw/locales/zh-TW.json --after "$RUNNER_TEMP/after.json" > "$RUNNER_TEMP/out/body.md"
+
       - uses: actions/upload-artifact@v4
-        if: steps.pick.outputs.run == 'true'
+        if: steps.pick.outputs.run == 'true' || steps.pick.outputs.resume == 'true'
         with:
           name: sync
           path: ${{ runner.temp }}/out
@@ -138,7 +161,7 @@ jobs:
   publish:
     name: Push the branch and open the pull request
     needs: prepare
-    if: needs.prepare.outputs.run == 'true'
+    if: needs.prepare.outputs.run == 'true' || needs.prepare.outputs.resume == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,12 +181,15 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
           BRANCH: ${{ needs.prepare.outputs.branch }}
           REPO: ${{ github.repository }}
+          RESUME: ${{ needs.prepare.outputs.resume }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::Add the ZHTW_SYNC_TOKEN secret (see the comment at the top of this workflow)."
             exit 1
           fi
-          git fetch "$RUNNER_TEMP/sync/sync.bundle" "$BRANCH:$BRANCH"
-          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push "https://github.com/$REPO.git" "$BRANCH"
+          if [ "$RESUME" != true ]; then
+            git fetch "$RUNNER_TEMP/sync/sync.bundle" "$BRANCH:$BRANCH"
+            auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push "https://github.com/$REPO.git" "$BRANCH"
+          fi
           gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "zh-TW：同步上游 $TAG" --body-file "$RUNNER_TEMP/sync/body.md"
