@@ -3,6 +3,8 @@ name: zh-TW CI
 on:
   push:
     branches: ['feat/zh-tw-**']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
