@@ -40,6 +40,9 @@
     "authorization", "Authorization", "content", "family", "fontFamily", "name", "border", "boxShadow", "outline", "className", "style",
     "id", "key", "value", "type", "kind", "command", "event"
   ],
+  "dynamicCalls": [
+    { "callee": "forgeNoun", "keys": ["pull request", "merge request", "pull requests", "merge requests", "Pull request", "Merge request", "Pull requests", "Merge requests"] }
+  ],
   "explicit": [
     { "file": "apps/desktop/src/shared/utils\\.ts$", "texts": ["{{0}}m ago", "{{0}}h ago", "{{0}}d ago", "{{0}}mo ago", "{{0}}y ago", "just now"] },
     { "file": "packages/core/src/git/repoGroups\\.ts$", "texts": ["Orange", "Blue", "Green", "Violet", "Red", "Teal", "Amber", "Pink"] },
@@ -53,6 +56,7 @@
     { "file": "features/sidebar/Sidebar\\.tsx$", "texts": ["folder missing", "no branch"] },
     { "file": "features/settings/AccountsTab\\.tsx$", "texts": ["Reconnected", "Connected"] },
     { "file": "components/FileTree\\.tsx$", "texts": ["Collapse", "Expand"] },
+    { "file": "components/ChangeMark\\.tsx$", "texts": ["modified", "added", "deleted", "renamed"] },
     { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] }
   ],
   "prefixConstraints": [{ "prefix": "Pull", "except": "^Pull requests?\\b" }],
