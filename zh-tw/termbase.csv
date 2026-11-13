@@ -24,8 +24,8 @@ tags,標籤
 remote,遠端
 remotes,遠端
 upstream,上游
-worktree,工作區
-worktrees,工作區
+worktree,工作樹
+worktrees,工作樹
 working tree,工作區
 submodule,子模組
 submodules,子模組
@@ -52,3 +52,11 @@ pull request,拉取請求
 pull requests,拉取請求
 merge request,合併請求
 merge requests,合併請求
+working copy,工作區
+history,歷史
+file history,檔案歷史
+profile,設定檔
+account,帳戶
+keyboard shortcut,快速鍵
+shortcut,快速鍵
+split (diff view),並排

@@ -34,6 +34,8 @@ export function placeholderProblem(source, target) {
   // A model that sees the JSX line may copy `{account.host}` into the text, where it would render literally.
   const braces = (text) => /[{}]/.test(text.replace(PLACEHOLDER, ''));
   if (braces(target) && !braces(source)) return 'contains braces that are not placeholders';
+  const markup = (text) => /<\/?[A-Za-z][^>]*>/.test(text);
+  if (markup(target) && !markup(source)) return 'contains markup copied from the code';
   return null;
 }
 

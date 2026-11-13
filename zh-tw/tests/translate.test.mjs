@@ -15,6 +15,9 @@ test('placeholders must match; English plural slots must be dropped', () => {
   assert.equal(normalize('AngKorGit v{{0}}', 'AngKorGit v{{0}}'), 'AngKorGit v{{0}}');
   assert.match(placeholderProblem('Make default for', '將 {account.host} 設為預設'), /braces/);
   assert.equal(placeholderProblem('Use {braces} here', '在此使用 {braces}'), null);
+  assert.match(placeholderProblem('Model', '模型 <span className="x">· 說明</span>'), /markup/);
+  assert.match(placeholderProblem('Back to graph', '返回圖表 <Kbd>Esc</Kbd>'), /markup/);
+  assert.equal(placeholderProblem('Use a < b', '使用 a < b'), null);
 });
 
 test('Mainland wording is reported as a warning, never an error', () => {
