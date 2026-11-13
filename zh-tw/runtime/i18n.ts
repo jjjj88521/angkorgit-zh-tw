@@ -33,6 +33,11 @@ export function setLocale(next: Locale): void {
   window.location.reload();
 }
 
+// The Chinese text in either locale, so search fields match both languages.
+export function zhtwText(source: string): string {
+  return translations[source] || '';
+}
+
 // English plural endings written next to a translated word, like `change{n === 1 ? '' : 's'}` in JSX.
 export function __s(suffix: string): string {
   return locale === 'en' ? suffix : '';

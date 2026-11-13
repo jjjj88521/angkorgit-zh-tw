@@ -72,6 +72,12 @@
         "file": "packages/core/src/settings/filter.ts",
         "anchor": "  { id: 'auto-fetch',",
         "before": "  { id: 'language', section: 'appearance', titles: ['Language'], keywords: 'locale chinese english traditional 語言 繁體中文 英文' },\n"
+      },
+      {
+        "file": "packages/core/src/settings/filter.ts",
+        "anchor": "${card.keywords}",
+        "after": " ${zhtwText(SETTINGS_SECTION_LABELS[card.section])} ${card.titles.map(zhtwText).join(' ')}",
+        "import": "import { zhtwText } from '../zhtw-i18n';"
       }
     ]
   },
