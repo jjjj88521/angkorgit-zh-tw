@@ -33,6 +33,11 @@ export function setLocale(next: Locale): void {
   window.location.reload();
 }
 
+// English plural endings written next to a translated word, like `change{n === 1 ? '' : 's'}` in JSX.
+export function __s(suffix: string): string {
+  return locale === 'en' ? suffix : '';
+}
+
 export function __t(source: string, params?: readonly unknown[]): string {
   const template = locale === 'en' ? source : translations[source] || source;
   if (!params) return template;

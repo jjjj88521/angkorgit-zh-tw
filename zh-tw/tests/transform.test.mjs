@@ -110,3 +110,31 @@ test('is idempotent', () => {
   const once = run("const a = <i title=\"Open\">{x ? 'Yes' : 'No'} done</i>; toast.error(`Bad ${x}`);").code;
   assert.equal(transform(once, 'a.tsx', rules, './i18n').entries.length, 0);
 });
+
+test('an English plural suffix in JSX goes through __s, which drops it outside English', () => {
+  const out = run("const a = <p>{n} change{n === 1 ? '' : 's'}</p>;");
+  assert.equal(out.code, "import { __t, __s } from './i18n';\nconst a = <p>{n} {__t(\"change\")}{__s(n === 1 ? '' : 's')}</p>;");
+  assert.equal(run("const a = <p>{n === 1 ? '' : 's'}</p>;").code, "import { __s } from './i18n';\nconst a = <p>{__s(n === 1 ? '' : 's')}</p>;");
+  assert.equal(body("toast.error(`${n} item${n === 1 ? '' : 's'} left`);"), 'toast.error(__t("{{0}} item{{1}} left", [n, n === 1 ? \'\' : \'s\']));');
+});
+
+test('words chosen inside a translated template are translated too', () => {
+  assert.equal(
+    body("toast.error(`Apply ${n} ${n === 1 ? 'file' : 'files'}`);"),
+    'toast.error(__t("Apply {{0}} {{1}}", [n, n === 1 ? __t("file") : __t("files")]));',
+  );
+  assert.equal(
+    body("toast.error(`${x}${local ? ' · local' : ''}${w ? ` · in worktree ${w}` : ''} — done`);"),
+    'toast.error(__t("{{0}}{{1}}{{2}} — done", [x, local ? __t(" · local") : \'\', w ? __t(" · in worktree {{0}}", [w]) : \'\']));',
+  );
+  assert.equal(body("const c = `box ${on ? 'is-on' : 'is-off'}`;"), "const c = `box ${on ? 'is-on' : 'is-off'}`;");
+});
+
+test('calls listed as dynamic keys are wrapped where they are used', () => {
+  const dyn = { ...rules, dynamicCalls: [{ callee: 'forgeNoun', keys: ['pull request', 'merge request'] }] };
+  const out = transform('const a = <b title={forgeNoun(kind)}>{forgeNoun(kind)}</b>;', 'a.tsx', dyn, './i18n');
+  assert.equal(out.code, "import { __t } from './i18n';\nconst a = <b title={__t(forgeNoun(kind))}>{__t(forgeNoun(kind))}</b>;");
+  assert.deepEqual([...new Set(out.entries.map((e) => e.key))], ['pull request', 'merge request']);
+  const nested = transform('toast.error(`Open ${forgeNoun(k)} now`);', 'a.tsx', dyn, './i18n');
+  assert.match(nested.code, /__t\("Open \{\{0\}\} now", \[__t\(forgeNoun\(k\)\)\]\)/);
+});

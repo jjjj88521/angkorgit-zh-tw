@@ -61,6 +61,20 @@ function calleeName(node) {
   return '?';
 }
 
+const SUFFIXES = new Set(['', 's', 'es']);
+const stringValue = (node) => (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) ? node.text : null);
+
+function isPluralSuffix(node) {
+  const values = [stringValue(node.whenTrue), stringValue(node.whenFalse)];
+  return values.every((v) => v !== null && SUFFIXES.has(v)) && values.includes('');
+}
+
+function isJsxChild(node) {
+  let p = node.parent;
+  while (ts.isParenthesizedExpression(p)) p = p.parent;
+  return ts.isJsxExpression(p) && (ts.isJsxElement(p.parent) || ts.isJsxFragment(p.parent));
+}
+
 function isUnderConstAssertion(node) {
   for (let a = node.parent; a && !ts.isFunctionLike(a) && !ts.isSourceFile(a); a = a.parent) {
     if (ts.isAsExpression(a) && a.type.getText() === 'const') return true;
@@ -85,12 +99,15 @@ export function transform(source, fileName, rules, importPath) {
   const denyKeys = new Set(rules.proseDenyKeys ?? []);
   const proseAllowed = !(rules.proseExclude ?? []).some((p) => new RegExp(p).test(relPath));
   const explicit = new Set((rules.explicit ?? []).filter((e) => new RegExp(e.file).test(relPath)).flatMap((e) => e.texts));
+  const dynamicCalls = new Map((rules.dynamicCalls ?? []).map((d) => [d.callee, d.keys]));
+  const translatedTemplates = new Set();
+  const used = new Set();
 
   const edits = [];
   const entries = [];
   const candidates = [];
   const lineOf = (pos) => sf.getLineAndCharacterOfPosition(pos).line + 1;
-  const call = (key, params) => `__t(${JSON.stringify(key)}${params === undefined ? '' : `, [${params}]`})`;
+  const call = (key, params) => used.add('__t') && `__t(${JSON.stringify(key)}${params === undefined ? '' : `, [${params}]`})`;
   const record = (key, kind, node) => entries.push({ key, kind, line: lineOf(node.getStart(sf)) });
 
   function position(node) {
@@ -110,6 +127,8 @@ export function transform(source, fileName, rules, importPath) {
         else return null;
       } else break;
     }
+    // A word picked by a ternary inside a template that is already translated, like `${n === 1 ? 'file' : 'files'}`.
+    if (ts.isTemplateSpan(p) && cur !== node && translatedTemplates.has(p.parent)) return { type: 'span' };
     if (ts.isJsxAttribute(p)) {
       const name = p.name.getText(sf);
       return attributes.has(name) ? { type: 'attr', direct: true } : { type: 'unknownAttr', ctx: name, direct: true };
@@ -148,7 +167,8 @@ export function transform(source, fileName, rules, importPath) {
     switch (pos.type) {
       case 'jsxChild': return hasWords(text) && !isAllCaps(text);
       case 'attr':
-      case 'sink': return hasWords(text);
+      case 'sink':
+      case 'span': return hasWords(text);
       case 'objKey':
       case 'labelSink': return looksNatural(text);
       case 'other': return proseAllowed && PROSE_CONTEXTS.has(pos.ctx) && looksProse(text);
@@ -194,6 +214,8 @@ export function transform(source, fileName, rules, importPath) {
       if (simple) {
         handleLiteral(node, pattern.replace(/\{\{\d+\}\}/g, '1'), pattern, (pos) => {
           if (!hasWords(literalText)) return;
+          translatedTemplates.add(node);
+          used.add('__t');
           edits.push({ start: node.getStart(sf), end: spans[0].expression.getFullStart(), text: `__t(${JSON.stringify(pattern)}, [` });
           for (let i = 0; i < spans.length - 1; i++) {
             edits.push({ start: spans[i].expression.getEnd(), end: spans[i + 1].expression.getFullStart(), text: ', ' });
@@ -205,6 +227,16 @@ export function transform(source, fileName, rules, importPath) {
       spans.forEach((s) => visit(s.expression));
       return;
     }
+    if (ts.isConditionalExpression(node) && isPluralSuffix(node) && isJsxChild(node)) {
+      used.add('__s');
+      edits.push({ start: node.getStart(sf), end: node.getEnd(), text: `__s(${node.getText(sf)})` });
+      return;
+    }
+    if (ts.isCallExpression(node) && dynamicCalls.has(calleeName(node))) {
+      used.add('__t');
+      edits.push({ start: node.getStart(sf), end: node.getStart(sf), text: '__t(' }, { start: node.getEnd(), end: node.getEnd(), text: ')' });
+      for (const key of dynamicCalls.get(calleeName(node))) record(key, 'dynamic', node);
+    }
     ts.forEachChild(node, visit);
   }
   visit(sf);
@@ -213,7 +245,8 @@ export function transform(source, fileName, rules, importPath) {
 
   const firstStatement = sf.statements.find((s) => !(ts.isExpressionStatement(s) && ts.isStringLiteral(s.expression)));
   const importAt = firstStatement ? firstStatement.getStart(sf) : source.length;
-  edits.push({ start: importAt, end: importAt, text: `import { __t } from '${importPath}';\n` });
+  const names = ['__t', '__s'].filter((name) => used.has(name)).join(', ');
+  edits.push({ start: importAt, end: importAt, text: `import { ${names} } from '${importPath}';\n` });
 
   edits.sort((a, b) => b.start - a.start || b.end - a.end);
   let code = source;
