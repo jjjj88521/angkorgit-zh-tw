@@ -8,6 +8,9 @@ name: zh-TW upstream sync
 #                     Workflows write. GITHUB_TOKEN cannot push a merge that touches upstream's
 #                     .github/workflows, and pull requests it opens do not trigger CI.
 #   OPENCODE_API_KEY  OpenCode Go key for the translation drafts.
+#
+# The prepare job runs upstream code (dependencies, the merged sources), so it never sees the PAT.
+# The publish job only runs git and gh on the prepared bundle.
 
 on:
   schedule:
@@ -29,28 +32,24 @@ env:
   UPSTREAM: cheat2001/angkorgit
 
 jobs:
-  sync:
+  prepare:
     name: Merge upstream and draft translations
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.ZHTW_SYNC_TOKEN }}
+    outputs:
+      run: ${{ steps.pick.outputs.run }}
+      tag: ${{ steps.pick.outputs.tag }}
+      branch: ${{ steps.pick.outputs.branch }}
     steps:
-      - name: Require the sync token
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Add the ZHTW_SYNC_TOKEN secret (see the comment at the top of this workflow)."
-            exit 1
-          fi
-
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.ZHTW_SYNC_TOKEN }}
+          persist-credentials: false
 
       - name: Pick the upstream release
         id: pick
         env:
+          GH_TOKEN: ${{ github.token }}
           INPUT_TAG: ${{ inputs.tag }}
         run: |
           tag="${INPUT_TAG:-$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)}"
@@ -90,7 +89,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - if: steps.pick.outputs.run == 'true'
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Update the locale keys
         id: keys
@@ -113,18 +112,58 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: node zh-tw/scripts/translate.mjs
 
-      - name: Open the pull request
+      - name: Bundle the branch and the pull request body
         if: steps.pick.outputs.run == 'true'
         env:
           TAG: ${{ steps.pick.outputs.tag }}
           BRANCH: ${{ steps.pick.outputs.branch }}
         run: |
+          mkdir -p "$RUNNER_TEMP/out"
           node zh-tw/scripts/check-locale.mjs > "$RUNNER_TEMP/check.txt" 2>&1 || true
           node zh-tw/scripts/sync-report.mjs --tag "$TAG" \
             --before "$RUNNER_TEMP/before.json" --after zh-tw/locales/zh-TW.json \
             --report "$RUNNER_TEMP/report.json" --check "$RUNNER_TEMP/check.txt" \
-            --failure "$RUNNER_TEMP/apply.log" > "$RUNNER_TEMP/body.md"
+            --failure "$RUNNER_TEMP/apply.log" > "$RUNNER_TEMP/out/body.md"
           git add zh-tw/locales/zh-TW.json
           git diff --cached --quiet || git commit -m "chore(zh-tw): sync locale for upstream $TAG"
-          git push origin "$BRANCH"
-          gh pr create --base main --head "$BRANCH" --title "zh-TW：同步上游 $TAG" --body-file "$RUNNER_TEMP/body.md"
+          git bundle create "$RUNNER_TEMP/out/sync.bundle" "main..$BRANCH"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.pick.outputs.run == 'true'
+        with:
+          name: sync
+          path: ${{ runner.temp }}/out
+          retention-days: 7
+
+  publish:
+    name: Push the branch and open the pull request
+    needs: prepare
+    if: needs.prepare.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sync
+          path: ${{ runner.temp }}/sync
+
+      - name: Push and open the pull request
+        env:
+          GH_TOKEN: ${{ secrets.ZHTW_SYNC_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Add the ZHTW_SYNC_TOKEN secret (see the comment at the top of this workflow)."
+            exit 1
+          fi
+          git fetch "$RUNNER_TEMP/sync/sync.bundle" "$BRANCH:$BRANCH"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push "https://github.com/$REPO.git" "$BRANCH"
+          gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "zh-TW：同步上游 $TAG" --body-file "$RUNNER_TEMP/sync/body.md"
