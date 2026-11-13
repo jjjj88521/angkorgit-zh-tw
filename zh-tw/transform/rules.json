@@ -41,15 +41,16 @@
     "id", "key", "value", "type", "kind", "command", "event"
   ],
   "explicit": [
-    { "file": "apps/desktop/src/shared/utils\\.ts$", "texts": ["{{0}}m ago", "{{0}}h ago", "{{0}}d ago", "{{0}}mo ago", "{{0}}y ago"] },
+    { "file": "apps/desktop/src/shared/utils\\.ts$", "texts": ["{{0}}m ago", "{{0}}h ago", "{{0}}d ago", "{{0}}mo ago", "{{0}}y ago", "just now"] },
     { "file": "packages/core/src/git/repoGroups\\.ts$", "texts": ["Orange", "Blue", "Green", "Violet", "Red", "Teal", "Amber", "Pink"] },
     { "file": "packages/core/src/settings/filter\\.ts$", "texts": ["Appearance", "Authentication", "Shortcuts"] },
     { "file": "packages/core/src/forge/providers/github\\.ts$", "texts": ["{{0}} — the source branch does not exist on this remote (is it pushed there?)"] },
     { "file": "features/graph/CommitGraph\\.tsx$", "texts": ["Branches and tags", "Commit message", "Author", "Hash", "Date"] },
-    { "file": "features/settings/SettingsDialog\\.tsx$", "texts": ["Settings"] },
+    { "file": "features/settings/SettingsDialog\\.tsx$", "texts": ["Settings", "https:// remotes use accounts · git@ remotes use SSH keys"] },
     { "file": "features/repository/GroupUpdateDialog\\.tsx$", "texts": ["Updated", "Skipped", "Failed", "Partial", "Cancelled", "Unchanged"] },
     { "file": "features/repository/WelcomePage\\.tsx$", "texts": ["Other", "Pulling group…", "Fetching group…"] },
-    { "file": "features/settings/FontsCard\\.tsx$", "texts": ["Monospace", "Fonts"] },
+    { "file": "features/settings/FontsCard\\.tsx$", "texts": ["Monospace", "Fonts", "same as Code"] },
+    { "file": "features/sidebar/Sidebar\\.tsx$", "texts": ["folder missing", "no branch"] },
     { "file": "features/settings/AccountsTab\\.tsx$", "texts": ["Reconnected", "Connected"] },
     { "file": "components/FileTree\\.tsx$", "texts": ["Collapse", "Expand"] },
     { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] }
