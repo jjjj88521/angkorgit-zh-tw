@@ -13,6 +13,12 @@ test('inject adds code around a unique anchor and its import at the top', () => 
   assert.equal(injectSource('d.tsx', 'a <b /> c', [{ file: 'd.tsx', anchor: '<b />', replace: '<i />' }]), 'a <i /> c');
 });
 
+test('inject matches multi-line anchors in a CRLF checkout and keeps its line endings', () => {
+  const edits = [{ file: 'a.tsx', anchor: 'one\ntwo', replace: 'x\ny', import: 'import z;' }];
+  assert.equal(injectSource('a.tsx', 'a\r\none\r\ntwo\r\nb', edits), 'import z;\r\na\r\nx\r\ny\r\nb');
+  assert.equal(injectSource('a.tsx', 'a\none\ntwo\nb', edits), 'import z;\na\nx\ny\nb');
+});
+
 test('inject fails when the anchor is missing or ambiguous', () => {
   const edits = [{ file: 'a.tsx', anchor: '<Fonts />', after: 'x' }];
   assert.throws(() => injectSource('a.tsx', 'nothing here', edits), /found 0 times/);
