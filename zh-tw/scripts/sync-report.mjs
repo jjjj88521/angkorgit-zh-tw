@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Writes the body of an upstream sync pull request to stdout.
+// Writes the body of a translation PR to stdout. `--before` is the locale on main, so a PR that
+// continues an unmerged one lists everything the reviewer has not approved yet.
 //
 //   node zh-tw/scripts/sync-report.mjs --tag v0.28.0 --before old.json --after zh-tw/locales/zh-TW.json \
-//     [--report report.json] [--check check.txt] [--failure apply.log]
+//     [--report report.json] [--check check.txt] [--failure apply.log] [--supersedes "12 v0.27.0"]
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -10,11 +11,19 @@ const MAX_ROWS = 300;
 
 const cell = (text) => text.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 
-export function syncReport({ tag, before, after, candidates = 0, check = '', failure = '' }) {
+export function syncReport({ tag, before, after, candidates = 0, check = '', failure = '', supersedes = null }) {
   const added = Object.keys(after).filter((key) => !(key in before));
   const removed = Object.keys(before).filter((key) => !(key in after));
   const drafted = added.filter((key) => after[key]);
-  const lines = [`同步上游 [${tag}](https://github.com/cheat2001/angkorgit/releases/tag/${tag})，並更新繁中語系檔。`, ''];
+  const lines = [`合併上游 [${tag}](https://github.com/cheat2001/angkorgit/releases/tag/${tag})，並更新繁中語系檔。`, ''];
+
+  if (supersedes) {
+    lines.push(
+      `> [!NOTE]`,
+      `> 接續尚未合併的 #${supersedes.number}（上游 ${supersedes.tag}），已包含它的審稿修改；#${supersedes.number} 會關閉，${supersedes.tag} 成為略過的上游版本。`,
+      '',
+    );
+  }
 
   if (failure) {
     lines.push('> [!CAUTION]', '> 轉換腳本失敗，語系檔沒有更新。請在這個分支修正 `zh-tw/transform/rules.json` 後再審稿。', '', '```', failure.trim(), '```', '');
@@ -65,6 +74,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       candidates: report.candidates?.length ?? 0,
       check: readText(option('--check')),
       failure: readText(option('--failure')),
+      supersedes: option('--supersedes') ? (([number, tag]) => ({ number, tag }))(option('--supersedes').split(' ')) : null,
     }),
   );
 }

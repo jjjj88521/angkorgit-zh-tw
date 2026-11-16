@@ -1,7 +1,11 @@
 name: zh-TW upstream sync
 
 # Merges each new upstream release into a branch, drafts translations for new strings
-# and opens a pull request into main for copy review.
+# and opens a translation PR into main for copy review.
+#
+# At most one translation PR is open (GLOSSARY.md). When a newer upstream release lands before the
+# open one is merged, the new branch continues from the open PR's branch, so its review edits carry
+# over, and the old PR is closed; its release becomes a skipped upstream release.
 #
 # Needs two secrets:
 #   ZHTW_SYNC_TOKEN   fine-grained PAT for this repository with Contents, Pull requests and
@@ -43,6 +47,8 @@ jobs:
       resume: ${{ steps.pick.outputs.resume }}
       tag: ${{ steps.pick.outputs.tag }}
       branch: ${{ steps.pick.outputs.branch }}
+      prev_pr: ${{ steps.pick.outputs.prev_pr }}
+      prev_tag: ${{ steps.pick.outputs.prev_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,6 +71,25 @@ jobs:
           branch="sync/upstream-$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          # Only branches in this repository count: a pull request from a fork can use the same branch name.
+          prev="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,headRefName,isCrossRepository --jq '
+            [.[] | select(.isCrossRepository == false and (.headRefName | test("^sync/upstream-v[0-9]+\\.[0-9]+\\.[0-9]+$")))]
+            | sort_by(.headRefName | ltrimstr("sync/upstream-v") | split(".") | map(tonumber))
+            | last // empty | "\(.number) \(.headRefName | ltrimstr("sync/upstream-"))"')"
+          prev_pr="${prev%% *}"
+          prev_tag="${prev#* }"
+          if [ -n "$prev" ] && ! git ls-remote --exit-code --heads origin "sync/upstream-$prev_tag" > /dev/null; then
+            echo "::warning::Translation PR #$prev_pr has no sync/upstream-$prev_tag branch here; ignoring it"
+            prev=""
+          fi
+          if [ -n "$prev" ] && [ "$prev_tag" != "$tag" ]; then
+            if [ "$(printf '%s\n%s\n' "$prev_tag" "$tag" | sort -V | tail -1)" != "$tag" ]; then
+              echo "Translation PR #$prev_pr already covers the newer $prev_tag"
+              exit 0
+            fi
+            echo "prev_pr=$prev_pr" >> "$GITHUB_OUTPUT"
+            echo "prev_tag=$prev_tag" >> "$GITHUB_OUTPUT"
+          fi
           if git merge-base --is-ancestor "$tag" HEAD; then
             echo "main already contains $tag"
           elif git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
@@ -85,10 +110,17 @@ jobs:
         env:
           TAG: ${{ steps.pick.outputs.tag }}
           BRANCH: ${{ steps.pick.outputs.branch }}
+          PREV_TAG: ${{ steps.pick.outputs.prev_tag }}
         run: |
           git config user.name "zh-TW sync"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$BRANCH"
+          git show HEAD:zh-tw/locales/zh-TW.json > "$RUNNER_TEMP/before.json"
+          if [ -n "$PREV_TAG" ]; then
+            git fetch --no-tags origin "sync/upstream-$PREV_TAG"
+            git switch -c "$BRANCH" FETCH_HEAD
+          else
+            git switch -c "$BRANCH"
+          fi
           # The fork only adds files, so a conflict means a fork file was changed by mistake.
           git merge --no-ff --no-edit -m "chore(sync): merge upstream $TAG" "$TAG"
 
@@ -106,7 +138,6 @@ jobs:
         id: keys
         if: steps.pick.outputs.run == 'true'
         run: |
-          cp zh-tw/locales/zh-TW.json "$RUNNER_TEMP/before.json"
           # A failing transform still opens the pull request, so the rule fix happens on this branch.
           if node zh-tw/scripts/apply.mjs --sync-locale > "$RUNNER_TEMP/apply.log" 2>&1; then
             rm "$RUNNER_TEMP/apply.log"
@@ -128,13 +159,14 @@ jobs:
         env:
           TAG: ${{ steps.pick.outputs.tag }}
           BRANCH: ${{ steps.pick.outputs.branch }}
+          SUPERSEDES: ${{ steps.pick.outputs.prev_pr && format('{0} {1}', steps.pick.outputs.prev_pr, steps.pick.outputs.prev_tag) || '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           node zh-tw/scripts/check-locale.mjs > "$RUNNER_TEMP/check.txt" 2>&1 || true
           node zh-tw/scripts/sync-report.mjs --tag "$TAG" \
             --before "$RUNNER_TEMP/before.json" --after zh-tw/locales/zh-TW.json \
             --report "$RUNNER_TEMP/report.json" --check "$RUNNER_TEMP/check.txt" \
-            --failure "$RUNNER_TEMP/apply.log" > "$RUNNER_TEMP/out/body.md"
+            --failure "$RUNNER_TEMP/apply.log" ${SUPERSEDES:+--supersedes "$SUPERSEDES"} > "$RUNNER_TEMP/out/body.md"
           git add zh-tw/locales/zh-TW.json
           git diff --cached --quiet || git commit -m "chore(zh-tw): sync locale for upstream $TAG"
           git bundle create "$RUNNER_TEMP/out/sync.bundle" "main..$BRANCH"
@@ -144,12 +176,14 @@ jobs:
         env:
           TAG: ${{ steps.pick.outputs.tag }}
           BRANCH: ${{ steps.pick.outputs.branch }}
+          SUPERSEDES: ${{ steps.pick.outputs.prev_pr && format('{0} {1}', steps.pick.outputs.prev_pr, steps.pick.outputs.prev_tag) || '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           git fetch --no-tags origin "$BRANCH"
           git show FETCH_HEAD:zh-tw/locales/zh-TW.json > "$RUNNER_TEMP/after.json"
           node zh-tw/scripts/sync-report.mjs --tag "$TAG" \
-            --before zh-tw/locales/zh-TW.json --after "$RUNNER_TEMP/after.json" > "$RUNNER_TEMP/out/body.md"
+            --before zh-tw/locales/zh-TW.json --after "$RUNNER_TEMP/after.json" \
+            ${SUPERSEDES:+--supersedes "$SUPERSEDES"} > "$RUNNER_TEMP/out/body.md"
 
       - uses: actions/upload-artifact@v4
         if: steps.pick.outputs.run == 'true' || steps.pick.outputs.resume == 'true'
@@ -182,6 +216,7 @@ jobs:
           BRANCH: ${{ needs.prepare.outputs.branch }}
           REPO: ${{ github.repository }}
           RESUME: ${{ needs.prepare.outputs.resume }}
+          PREV_PR: ${{ needs.prepare.outputs.prev_pr }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::Add the ZHTW_SYNC_TOKEN secret (see the comment at the top of this workflow)."
@@ -192,4 +227,10 @@ jobs:
             auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
             git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push "https://github.com/$REPO.git" "$BRANCH"
           fi
-          gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "zh-TW：同步上游 $TAG" --body-file "$RUNNER_TEMP/sync/body.md"
+          url="$(gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "zh-TW 翻譯 PR：上游 $TAG" --body-file "$RUNNER_TEMP/sync/body.md")"
+          echo "$url"
+          if [ -n "$PREV_PR" ]; then
+            # The new branch contains the old one, so deleting the old branch loses nothing.
+            gh pr close "$PREV_PR" --repo "$REPO" --delete-branch \
+              --comment "由 #${url##*/} 取代：上游 $TAG 已發佈，新 PR 接續這個分支，已包含這裡的審稿修改。"
+          fi
