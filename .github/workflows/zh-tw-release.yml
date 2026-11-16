@@ -34,8 +34,17 @@ jobs:
             echo "::error::Run zh-tw/scripts/updater-key-wizard.sh and commit the public key first."
             exit 1
           fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Require a complete locale
-        run: node zh-tw/scripts/check-locale.mjs --require-complete
+        # check-locale reads only the dictionary; apply.mjs also catches strings it has no entry for.
+        run: |
+          node zh-tw/scripts/check-locale.mjs --require-complete
+          node zh-tw/scripts/apply.mjs --require-complete
       - name: Count earlier zh-TW releases
         id: version
         env:
@@ -126,4 +135,29 @@ jobs:
             - 繁中版與上游版是不同的 App，可以同時安裝，設定不共用。
             - 安裝檔沒有程式碼簽章：macOS 第一次開啟請按右鍵 →「打開」，Windows 若出現 SmartScreen 請按「其他資訊」→「仍要執行」。
           releaseDraft: true
+          # The manifest job writes latest.json once every build is uploaded.
+          includeUpdaterJson: false
           args: ${{ matrix.args }} --config src-tauri/tauri.zh-tw.conf.json
+
+  manifest:
+    name: Write the updater manifest
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build latest.json from the signatures
+        run: |
+          tag="v$VERSION"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern '*.sig' --dir "$RUNNER_TEMP/sigs"
+          ls "$RUNNER_TEMP/sigs"
+          node zh-tw/scripts/updater-manifest.mjs --repo "$GITHUB_REPOSITORY" --tag "$tag" --version "$VERSION" \
+            --sigs "$RUNNER_TEMP/sigs" > "$RUNNER_TEMP/latest.json"
+          cat "$RUNNER_TEMP/latest.json"
+          gh release upload "$tag" "$RUNNER_TEMP/latest.json" --repo "$GITHUB_REPOSITORY" --clobber
