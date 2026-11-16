@@ -71,12 +71,17 @@ jobs:
           branch="sync/upstream-$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          prev="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,headRefName --jq '
-            [.[] | select(.headRefName | test("^sync/upstream-v[0-9]+\\.[0-9]+\\.[0-9]+$"))]
+          # Only branches in this repository count: a pull request from a fork can use the same branch name.
+          prev="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,headRefName,isCrossRepository --jq '
+            [.[] | select(.isCrossRepository == false and (.headRefName | test("^sync/upstream-v[0-9]+\\.[0-9]+\\.[0-9]+$")))]
             | sort_by(.headRefName | ltrimstr("sync/upstream-v") | split(".") | map(tonumber))
             | last // empty | "\(.number) \(.headRefName | ltrimstr("sync/upstream-"))"')"
           prev_pr="${prev%% *}"
           prev_tag="${prev#* }"
+          if [ -n "$prev" ] && ! git ls-remote --exit-code --heads origin "sync/upstream-$prev_tag" > /dev/null; then
+            echo "::warning::Translation PR #$prev_pr has no sync/upstream-$prev_tag branch here; ignoring it"
+            prev=""
+          fi
           if [ -n "$prev" ] && [ "$prev_tag" != "$tag" ]; then
             if [ "$(printf '%s\n%s\n' "$prev_tag" "$tag" | sort -V | tail -1)" != "$tag" ]; then
               echo "Translation PR #$prev_pr already covers the newer $prev_tag"
