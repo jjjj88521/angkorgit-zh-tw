@@ -19,6 +19,13 @@ test('sync report counts added, drafted and removed keys and lists them', () => 
   assert.match(body, /\| Old \\\| thing \| 舊的 \|/);
   assert.match(body, /Create a merge commit/);
   assert.doesNotMatch(body, /CAUTION/);
+  assert.doesNotMatch(body, /接續/);
+});
+
+test('sync report names the translation PR it supersedes', () => {
+  const body = syncReport({ tag: 'v0.29.0', before: {}, after: {}, supersedes: { number: '3', tag: 'v0.28.0' } });
+  assert.match(body, /接續尚未合併的 #3（上游 v0\.28\.0）/);
+  assert.match(body, /v0\.28\.0 成為略過的上游版本/);
 });
 
 test('sync report shows a transform failure and skips empty sections', () => {
