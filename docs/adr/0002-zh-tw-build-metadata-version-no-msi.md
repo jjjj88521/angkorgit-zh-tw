@@ -21,7 +21,10 @@ status: accepted
 
 - fork 的 CI 以 `0.27.0+zh-TW.1` 實際打包 macOS、Linux（deb、rpm、AppImage）、Windows（NSIS）全部成功；GitHub 保留檔名中的 `+`，`latest.json` 的網址編碼為 `%2B`。
 
-尚未驗證，不影響本決策但發首版前要做：
+- 2026-11-16 在 macOS 實機安裝 `0.27.0+zh-TW.1`，可與上游版並存；App 內更新到 `0.28.0+zh-TW.1` 成功，`latest.json` 中編碼為 `%2B` 的網址可正常下載與驗證簽章。
 
-- 實機安裝，以及 App 內從 `+zh-TW.N` 更新到 `+zh-TW.(N+1)`。
+尚未驗證，不影響本決策：
+
+- 同一上游版本內從 `+zh-TW.N` 更新到 `+zh-TW.(N+1)`（只差 build metadata）。
+- Windows 與 Linux 的實機安裝與更新。
 - rpm 的 Version 含 `-`，建置可過，但以 `dnf` 安裝與升級的行為未測。
