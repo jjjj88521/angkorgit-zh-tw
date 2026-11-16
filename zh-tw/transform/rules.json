@@ -28,7 +28,8 @@
     "Error": [0],
     "AiError": [0],
     "ForgeError": [0],
-    "label.startsWith": [0]
+    "label.startsWith": [0],
+    "toastActionError": [0]
   },
   "proseExclude": [
     "apps/desktop/src/core/ipc\\.ts$",
@@ -61,7 +62,7 @@
     { "file": "features/repository/RepoDialogs\\.tsx$", "texts": ["create branch {{0}}", "rename {{0}} → {{1}}"] },
     { "file": "features/inspector/CommitDetails\\.tsx$", "texts": ["edit commit message"] },
     { "file": "features/graph/InteractiveRebaseDialog\\.tsx$", "texts": ["interactive rebase"] },
-    { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}"] },
+    { "file": "features/commit/WorkingCopyPanel\\.tsx$", "texts": [" {{0}} file{{1}}", "{{0}} and {{1}}"] },
     { "file": "components/PullCheckDialog\\.tsx$", "texts": ["commit", "new commit", "file"] }
   ],
   "inject": {
@@ -94,10 +95,12 @@
         "anchor": "return `${n} ${noun}${n === 1 ? '' : 's'}`;",
         "replace": "return __n(n, noun, n === 1 ? '' : 's');",
         "import": "import { __n } from '../../../../packages/core/src/zhtw-i18n';"
-      }
+      },
+      {"file": "apps/desktop/src/components/HookFailedDialog.tsx", "anchor": "The {warning?.hook ?? 'post-checkout'} hook {warning?.timedOut ? 'timed out' : 'failed'}", "replace": "{warning?.timedOut ? `The ${warning?.hook ?? 'post-checkout'} hook timed out` : `The ${warning?.hook ?? 'post-checkout'} hook failed`}"},
+      {"file": "apps/desktop/src/components/HookFailedDialog.tsx", "anchor": "{warning?.message} Nothing was undone in {warning?.repoName}\n            {warning?.timedOut ? '.' : ': git ignores the exit code of this hook.'}", "replace": "{warning?.message}{' '}\n            {warning?.timedOut ? `Nothing was undone in ${warning?.repoName}.` : `Nothing was undone in ${warning?.repoName}: git ignores the exit code of this hook.`}"}
     ]
   },
-  "textSlots": ["Committed{{0}}", "Commit amended{{0}}", "Commit failed{{0}}: {{1}}"],
+  "textSlots": ["Committed{{0}}", "Commit amended{{0}}", "Commit failed{{0}}", "Pull all{{0}} (fast-forward only)"],
   "prefixConstraints": [{ "prefix": "Pull", "except": "^Pull requests?\\b" }],
   "keep": {
     "exact": ["AngKorGit", "AngKor", "Git", "GitHub", "GitLab", "Bitbucket", "English"],
