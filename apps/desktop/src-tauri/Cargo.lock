@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "angkorgit"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "base64 0.22.1",
  "fontdb",
@@ -66,6 +66,7 @@ dependencies = [
  "notify-debouncer-mini",
  "portable-pty",
  "reqwest 0.12.28",
+ "same-file",
  "serde",
  "serde_json",
  "tauri",
@@ -75,8 +76,10 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tempfile",
  "thiserror 2.0.19",
  "which",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
