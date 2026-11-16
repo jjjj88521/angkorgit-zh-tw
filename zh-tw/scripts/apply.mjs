@@ -7,6 +7,7 @@
 //   node zh-tw/scripts/apply.mjs --report f.json write every key and candidate with its location
 //   node zh-tw/scripts/apply.mjs --sync-locale   add newly found keys to zh-tw/locales/zh-TW.json
 //   node zh-tw/scripts/apply.mjs --restore       undo --write in a local checkout
+//   node zh-tw/scripts/apply.mjs --require-complete  fail when a found key has no translation
 //
 // --write needs a clean checkout under the roots and records what it wrote, so --restore
 // only undoes files that still hold the rewrite and keeps any edit made afterwards.
@@ -123,6 +124,10 @@ for (const root of rules.roots) {
 const locale = JSON.parse(fs.readFileSync(localePath, 'utf8'));
 const missing = [...keys.keys()].filter((k) => !locale[k]);
 const obsolete = Object.keys(locale).filter((k) => !keys.has(k));
+
+if (flag('--require-complete') && missing.length) {
+  fail(`${missing.length} strings have no translation, such as ${JSON.stringify(missing[0])}`);
+}
 
 if (flag('--sync-locale')) {
   // Keys of rewritten files are not collected, so syncing now would drop their translations.
