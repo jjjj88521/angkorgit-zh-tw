@@ -25,7 +25,7 @@ case "$configured" in RUN*) configured="" ;; esac
 local_key=false
 [ -f "$KEY" ] && [ -f "$KEY.pub" ] && [ -f "$KEY.password" ] && local_key=true
 
-if [ "$local_key" = true ] && { [ -z "$configured" ] || [ "$configured" = "$(cat "$KEY.pub")" ]; }; then
+if [ "$ROTATE" = false ] && [ "$local_key" = true ] && { [ -z "$configured" ] || [ "$configured" = "$(cat "$KEY.pub")" ]; }; then
   echo "Using the existing key in $KEY to finish the setup."
 elif [ -n "$configured" ] && [ "$ROTATE" = false ]; then
   echo "The release config already holds a public key, and this machine does not have its private key."
@@ -39,8 +39,11 @@ else
   if [ "$ROTATE" = true ]; then
     read -r -p "Type ROTATE to replace the updater key. Installed apps will stop receiving updates: " answer
     [ "$answer" = "ROTATE" ] || { echo "Cancelled."; exit 1; }
-    [ -e "$KEY" ] && mv "$KEY" "$KEY.replaced-$(date +%Y%m%d%H%M%S)"
-    rm -f "$KEY.pub" "$KEY.password"
+    # The old pair stays usable for anything it already signed, so keep all three files together.
+    stamp="$(date +%Y%m%d%H%M%S)"
+    for file in "$KEY" "$KEY.pub" "$KEY.password"; do
+      [ -e "$file" ] && mv "$file" "$file.replaced-$stamp"
+    done
   fi
   step "Generate the key"
   mkdir -p "$(dirname "$KEY")"

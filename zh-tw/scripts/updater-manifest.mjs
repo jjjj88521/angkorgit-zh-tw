@@ -2,7 +2,8 @@
 // Builds latest.json for the updater from the `.sig` files of a release, once every build is done.
 // tauri-action's per-job manifest upload is read-modify-write, so parallel jobs can drop a platform.
 //
-//   node zh-tw/scripts/updater-manifest.mjs --repo owner/name --tag v0.27.0+zh-TW.1 --version 0.27.0+zh-TW.1 --sigs dir
+//   node zh-tw/scripts/updater-manifest.mjs --repo owner/name --tag v0.27.0+zh-TW.1 --version 0.27.0+zh-TW.1 --sigs dir \
+//     [--require darwin-aarch64,darwin-x86_64,linux-x86_64,windows-x86_64]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +25,7 @@ function archesOf(name) {
 }
 
 /** `sigs` maps an asset name ending in `.sig` to the signature text. */
-export function updaterManifest({ repo, tag, version, notes = '', pubDate, sigs }) {
+export function updaterManifest({ repo, tag, version, notes = '', pubDate, sigs, require = [] }) {
   const platforms = {};
   const primary = {};
   for (const [sigName, signature] of Object.entries(sigs)) {
@@ -42,6 +43,8 @@ export function updaterManifest({ repo, tag, version, notes = '', pubDate, sigs 
   }
   for (const [key, { entry }] of Object.entries(primary)) platforms[key] = entry;
   if (!Object.keys(primary).length) throw new Error('no signature files found');
+  const absent = require.filter((key) => !primary[key]);
+  if (absent.length) throw new Error(`no updater signature for ${absent.join(', ')}`);
   const sorted = Object.fromEntries(Object.entries(platforms).sort(([a], [b]) => a.localeCompare(b)));
   return { version, notes, pub_date: pubDate ?? new Date().toISOString(), platforms: sorted };
 }
@@ -53,6 +56,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const sigs = Object.fromEntries(
     fs.readdirSync(dir).filter((f) => f.endsWith('.sig')).map((f) => [f, fs.readFileSync(path.join(dir, f), 'utf8')]),
   );
-  const manifest = updaterManifest({ repo: option('--repo'), tag: option('--tag'), version: option('--version'), notes: option('--notes') ?? '', sigs });
+  const manifest = updaterManifest({ repo: option('--repo'), tag: option('--tag'), version: option('--version'), notes: option('--notes') ?? '', sigs, require: (option('--require') ?? '').split(',').filter(Boolean) });
   process.stdout.write(JSON.stringify(manifest, null, 2) + '\n');
 }

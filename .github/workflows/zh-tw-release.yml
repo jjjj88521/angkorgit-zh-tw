@@ -158,6 +158,7 @@ jobs:
           gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern '*.sig' --dir "$RUNNER_TEMP/sigs"
           ls "$RUNNER_TEMP/sigs"
           node zh-tw/scripts/updater-manifest.mjs --repo "$GITHUB_REPOSITORY" --tag "$tag" --version "$VERSION" \
-            --sigs "$RUNNER_TEMP/sigs" > "$RUNNER_TEMP/latest.json"
+            --sigs "$RUNNER_TEMP/sigs" --require darwin-aarch64,darwin-x86_64,linux-x86_64,windows-x86_64 \
+            > "$RUNNER_TEMP/latest.json"
           cat "$RUNNER_TEMP/latest.json"
           gh release upload "$tag" "$RUNNER_TEMP/latest.json" --repo "$GITHUB_REPOSITORY" --clobber

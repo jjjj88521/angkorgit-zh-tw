@@ -31,3 +31,10 @@ test('an unknown signature file or none at all is an error', () => {
   assert.throws(() => updaterManifest({ ...base, sigs: { 'notes.txt.sig': 'x' } }), /cannot tell the platform/);
   assert.throws(() => updaterManifest({ ...base, sigs: {} }), /no signature files/);
 });
+
+test('a required platform without a signature is an error', () => {
+  const sigs = { 'A_universal.app.tar.gz.sig': 'mac', 'A_x64-setup.exe.sig': 'nsis' };
+  const require = ['darwin-aarch64', 'darwin-x86_64', 'linux-x86_64', 'windows-x86_64'];
+  assert.throws(() => updaterManifest({ ...base, sigs, require }), /no updater signature for linux-x86_64$/);
+  assert.ok(updaterManifest({ ...base, sigs: { ...sigs, 'A_amd64.AppImage.sig': 'linux' }, require }).platforms['linux-x86_64']);
+});
