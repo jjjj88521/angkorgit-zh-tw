@@ -3,7 +3,7 @@
   "identifier": "dev.angkorgit.zhtw",
   "plugins": {
     "updater": {
-      "pubkey": "RUN zh-tw/scripts/updater-key-wizard.sh"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCMjE1RTAwRkRBMkI0MzMKUldRenRLTDlBRjRoTzBpVENSL3NxMFI4bk5XVEV3M3lpMWl0VWFxdWNwVTJnVU9hb1hsQTNZa3QK"
     }
   }
 }
