@@ -6,6 +6,55 @@ All notable changes to AngKorGit are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-11-15
+
+The hooks release. AngKorGit now runs the hooks Git runs after a checkout, a pull or
+a rebase, so a project's `npm install` or rebuild step happens in the app too. It also
+fixes a pull with rebase that got stuck on a submodule update, and makes discarding
+staged changes safer. Thanks to @ChrisLauinger77, who reported and fixed all three.
+
+### Added
+- **Your `post-checkout`, `post-merge` and `post-rewrite` hooks run** (#82).
+  AngKorGit already ran the hooks that come before a commit or a push. Now it also
+  runs the ones Git runs afterwards, at the same moments and with the same input:
+  `post-checkout` after switching branches, cloning, adding a worktree or discarding
+  files, `post-merge` after a merge or a pull that brought in commits, and
+  `post-rewrite` after amend, reword or rebase. A failing hook never undoes what you
+  did, you get a warning with **Show output** instead. A hook that runs for more than
+  10 minutes is stopped and reported.
+- **Pull without hooks.** The Pull menu offers it when the repository has one of
+  these hooks, or keeps its hooks inside the project (like `.husky`), where a pull
+  could bring in a new one. **Skip hooks** in the commit box also covers
+  `post-rewrite` when you amend, and a rebase you started without hooks stays that
+  way when you continue it after a conflict.
+- **Pull all runs `post-merge` too** (#69). One repository at a time, only in the
+  ones it updated. A failing hook shows on that repository's row and the rest of the
+  group still updates. **Pull all without hooks** in the group menu skips them.
+
+### Changed
+- **A rebase with nothing to do does nothing**, like `git rebase`. It says "Already
+  up to date" instead of re-creating your commits with new dates.
+- **Fast-forward merges and pulls set `ORIG_HEAD`**, like `git merge`, so
+  `git diff ORIG_HEAD HEAD` shows what a pull brought in.
+
+### Fixed
+- **Pull with rebase no longer fails when the upstream moved a submodule** (#89).
+  Your commits are replayed and the submodule follows the new commit. A rebase that
+  got stuck this way in an older version finishes with Continue rebase.
+- **Discarding staged changes only touches the files you picked** (#91). A file name
+  with `[`, `]`, `*` or `?` in it could also reset files the name happened to match.
+  Discarding either name of a renamed file now brings the original back, and when
+  another Git program is busy with the repository, nothing changes.
+- **Discarding several files no longer stops at one it can't discard.** The rest are
+  still restored, and AngKorGit names the files that failed instead of saying
+  everything was discarded. The same goes for Discard all staged changes.
+- Starting another operation while a hook is still running now tells you which hook
+  is running instead of showing an error, and aborting a rebase during its
+  `post-checkout` hook no longer reports a missing file.
+- When a hook leaves something running in the background, Cancel in Pull all waits
+  for it where it can and says so on the row when it can't be sure it stopped. Hooks
+  that already finished no longer get a warning.
+
 ## [0.27.0] — 2026-11-09
 
 The review release. Text is easier to read in every theme, diffs are calmer to review,
@@ -1934,7 +1983,8 @@ The first release. 🏛️
 - AI assistant with pluggable providers (OpenAI, Anthropic, Gemini, Ollama,
   LM Studio): commit messages, diff/conflict explanations, PR descriptions, reviews
 
-[Unreleased]: https://github.com/cheat2001/angkorgit/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/cheat2001/angkorgit/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/cheat2001/angkorgit/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/cheat2001/angkorgit/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/cheat2001/angkorgit/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/cheat2001/angkorgit/compare/v0.24.0...v0.25.0
