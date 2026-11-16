@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# This fork never changes upstream files (docs/adr/0001), so reviews cover only what the fork adds.
+# Sync pull requests carry thousands of upstream lines; findings there belong upstream.
+language: zh-TW
+reviews:
+  path_filters:
+    - "zh-tw/**"
+    - ".github/workflows/zh-tw-*.yml"
+    - ".coderabbit.yaml"
+    - "docs/adr/**"
+    - "GLOSSARY.md"
