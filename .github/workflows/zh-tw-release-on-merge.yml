@@ -1,0 +1,35 @@
+name: zh-TW release on merge
+
+# Merging a translation PR is the copy approval (GLOSSARY.md), so it starts zh-TW release on main.
+# That workflow only creates a draft; publishing the draft stays a manual step.
+#
+# A workflow_dispatch sent with GITHUB_TOKEN still starts a run, unlike other GITHUB_TOKEN events.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Start zh-TW release
+    if: >-
+      github.event.pull_request.merged &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'sync/upstream-')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: write
+    steps:
+      - name: Dispatch zh-tw-release.yml and tell the reviewer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh workflow run zh-tw-release.yml --repo "$REPO" --ref main
+          gh pr comment "$PR" --repo "$REPO" --body "已觸發 [zh-TW release](https://github.com/$REPO/actions/workflows/zh-tw-release.yml)。完成後到 [Releases](https://github.com/$REPO/releases) 檢查 draft，確認無誤再手動發布。"
